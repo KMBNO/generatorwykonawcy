@@ -821,7 +821,9 @@ const PATTERNS = {
   dowod:  [/dow[oó]d/i, /seria.*numer/i, /nr.*dowodu/i],
   nip:    [/^nip/i, /nip/i],
   zakres: [/zakres.*remont/i, /zakres.*prac/i, /zakres/i, /prace/i],
-  area:   [/powierzchni/i, /metra/i, /\bm2\b/i, /m²/i],
+  /* „Powierzchnia użytkowa" ma pierwszeństwo — tablica może mieć też
+     zwykłą „Powierzchnię" (np. działki), a do umowy wchodzi użytkowa. */
+  area:   [/powierzchnia\s*u[żz]ytkowa/i, /pow\.?\s*u[żz]ytk/i, /u[żz]ytkowa/i, /powierzchni/i, /metra/i, /\bm2\b/i, /m²/i],
   city:   [/miejscowo/i, /miasto/i],
   street: [/ulica/i, /^adres/i, /lokalizacj/i]
 };
