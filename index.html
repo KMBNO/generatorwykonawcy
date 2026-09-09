@@ -1,0 +1,1762 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generator Umów z Wykonawcami — KMBNO</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5f4f0;
+  --surface: #ffffff;
+  --surface2: #f0efe9;
+  --border: #e0ddd5;
+  --border2: #ccc9be;
+  --text: #1a1916;
+  --text2: #6b6860;
+  --text3: #a8a59e;
+  --accent: #1a1916;
+  --accent-bg: #1a1916;
+  --accent-text: #f5f4f0;
+  --green: #2d6a4f;
+  --green-bg: #eaf4ee;
+  --green-border: #b7dfc7;
+  --red: #c0392b;
+  --red-bg: #fdf0ef;
+  --warn-bg: #fef9ec;
+  --warn-border: #f0d87c;
+  --warn-text: #7a6200;
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 14px;
+}
+
+header {
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+header .logo { font-size: 15px; font-weight: 600; letter-spacing: 0.05em; }
+header .subtitle { font-size: 12px; opacity: 0.5; }
+
+.nav-tab {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255,255,255,0.2);
+  background: transparent;
+  color: rgba(255,255,255,0.55);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .15s;
+}
+.nav-tab.active { background: #ffffff; color: #1a1916; border-color: #ffffff; }
+
+.app { display: flex; height: calc(100vh - 53px); }
+
+.sidebar {
+  width: 360px;
+  min-width: 360px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-inner { padding: 20px; flex: 1; }
+
+.preview-pane { flex: 1; overflow-y: auto; background: var(--bg); padding: 32px; }
+
+.section { margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+.section:last-child { border-bottom: none; margin-bottom: 0; }
+
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 10px;
+}
+
+.pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.pill {
+  padding: 5px 12px;
+  border: 1px solid var(--border2);
+  border-radius: 100px;
+  font-size: 12px;
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--text2);
+  transition: all 0.15s;
+  user-select: none;
+}
+.pill:hover { border-color: var(--text); color: var(--text); }
+.pill.active { background: var(--accent-bg); color: var(--accent-text); border-color: var(--accent-bg); }
+.pills.col { flex-direction: column; }
+.pills.col .pill { border-radius: var(--radius); }
+
+.field { margin-top: 10px; }
+.field:first-child { margin-top: 0; }
+.field label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text2);
+  margin-bottom: 4px;
+  letter-spacing: 0.02em;
+}
+.field-row { display: flex; gap: 8px; }
+.field-row .field { flex: 1; }
+
+input[type=text], input[type=number], input[type=date], input[type=password], select, textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  outline: none;
+  transition: border-color 0.15s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--text); }
+textarea { resize: vertical; line-height: 1.5; }
+
+.search-wrap { position: relative; }
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 100;
+  display: none;
+}
+.dropdown.open { display: block; }
+.dd-item { padding: 9px 12px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.1s; }
+.dd-item:last-child { border-bottom: none; }
+.dd-item:hover { background: var(--surface2); }
+.dd-item .dn { font-size: 13px; font-weight: 500; }
+.dd-item .da { font-size: 11px; color: var(--text3); margin-top: 1px; }
+
+.selected-badge {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--green-bg);
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--green);
+  display: none;
+  line-height: 1.5;
+}
+
+.hint { font-size: 11px; color: var(--text3); margin-top: 4px; line-height: 1.45; }
+.warn-box {
+  margin-top: 8px; padding: 8px 10px;
+  background: var(--warn-bg); border: 1px solid var(--warn-border);
+  border-radius: var(--radius); font-size: 11px; color: var(--warn-text); line-height: 1.5;
+}
+
+.btn-row { display: flex; gap: 8px; padding: 16px 20px; border-top: 1px solid var(--border); background: var(--surface); position: sticky; bottom: 0; }
+.btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: var(--radius);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+.btn-primary { background: var(--accent-bg); color: var(--accent-text); }
+.btn-primary:hover { opacity: 0.85; }
+.btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border2); }
+.btn-secondary:hover { background: var(--surface2); }
+.btn-mini {
+  padding: 3px 10px; font-size: 11px; background: var(--surface2); color: var(--text2);
+  border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer;
+  font-weight: 500; font-family: inherit; white-space: nowrap;
+}
+.btn-mini:hover { background: var(--border); }
+
+/* ── Dokument ── */
+.doc-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 48px 56px;
+  max-width: 780px;
+  margin: 0 auto 20px;
+}
+.doc-actions { display: flex; justify-content: flex-end; gap: 8px; max-width: 780px; margin: 0 auto 20px; }
+
+.doc { font-family: 'DM Sans', sans-serif; font-size: 13px; line-height: 1.85; color: var(--text); }
+.doc h3 {
+  font-size: 14px; font-weight: 600; text-align: center; margin-bottom: 4px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.doc .sub { font-size: 12px; text-align: center; color: var(--text2); margin-bottom: 22px; }
+.doc .party { margin-bottom: 12px; }
+.doc .party div { line-height: 1.55; }
+.doc .par { margin-bottom: 14px; }
+.doc .par-title { font-weight: 600; text-align: center; margin-bottom: 2px; }
+.doc .par-sub { font-weight: 600; text-align: center; margin-bottom: 6px; font-size: 12.5px; }
+.doc ol, .doc ul { padding-left: 22px; }
+.doc li { margin-bottom: 5px; }
+.doc p { text-align: justify; }
+.blank { display: inline; border-bottom: 1px solid var(--border2); color: var(--text3); padding: 0 1px; }
+.blank.f { display: inline; color: var(--text); border-bottom: none; padding: 0; }
+.doc .sig { display: flex; justify-content: space-between; margin-top: 46px; font-size: 12px; }
+.doc .sig div { text-align: center; width: 44%; }
+.doc .sig .line { border-top: 1px solid var(--border2); padding-top: 6px; margin-top: 30px; color: var(--text2); }
+
+/* Załącznik */
+.zal-head { text-align: right; font-size: 11.5px; color: var(--text2); margin-bottom: 18px; }
+.zal-meta { margin-bottom: 16px; }
+.zal-meta div { margin-bottom: 3px; }
+.zal-sec-title { font-weight: 600; margin: 14px 0 5px; }
+
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; color: var(--text3); gap: 8px; min-height: 400px;
+}
+.empty-state .icon { font-size: 32px; opacity: 0.3; }
+.empty-state p { font-size: 13px; }
+
+.loading-badge { font-size: 11px; color: var(--text3); font-style: italic; margin-top: 6px; }
+
+/* Konfiguracja */
+.cfg-pane { display: none; height: calc(100vh - 53px); overflow-y: auto; padding: 32px; }
+.cfg-card {
+  max-width: 720px; margin: 0 auto 20px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px 28px;
+}
+.cfg-card h2 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.cfg-card .cd { font-size: 12px; color: var(--text2); margin-bottom: 16px; line-height: 1.55; }
+.map-grid { display: grid; grid-template-columns: 130px 1fr; gap: 8px 12px; align-items: center; }
+.map-grid label { font-size: 12px; color: var(--text2); }
+
+@media print {
+  @page { margin: 20mm 22mm; size: A4; }
+  header, .sidebar, .doc-actions, .btn-row, .cfg-pane { display: none !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { height: auto; background: white !important; font-family: 'Times New Roman', Times, serif !important; }
+  .app { height: auto; display: block; overflow: visible; }
+  .preview-pane { padding: 0 !important; background: white !important; overflow: visible; max-height: none; }
+  .doc-wrap { border: none !important; box-shadow: none !important; padding: 0 !important; max-width: 100% !important; margin: 0 !important; border-radius: 0 !important; }
+  .doc, .doc p, .doc li, .doc ol, .doc ul, .doc div {
+    font-family: 'Times New Roman', Times, serif !important;
+    font-size: 11pt !important; line-height: 1.55 !important; color: #000 !important;
+  }
+  .doc h3 { font-size: 12.5pt !important; margin-bottom: 4pt; }
+  .doc .sub { font-size: 10.5pt !important; color: #333 !important; margin-bottom: 14pt; }
+  .doc .par { margin-bottom: 9pt; page-break-inside: avoid; break-inside: avoid; }
+  .doc .par-title, .doc .par-sub { page-break-after: avoid !important; break-after: avoid !important; }
+  .doc ul, .doc ol { orphans: 2; widows: 2; }
+  .blank { border-bottom: 1px solid #555 !important; color: #555 !important; }
+  .blank.f { border-bottom: none !important; color: #000 !important; }
+  .doc .sig { margin-top: 28pt; }
+  .doc .sig .line { margin-top: 24pt; }
+  #zalacznikWrap { page-break-before: always; break-before: page; }
+  .empty-state { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ EKRAN LOGOWANIA ═══════════ -->
+<div id="loginScreen" style="display:none;position:fixed;inset:0;z-index:9999;background:#1a1916;align-items:center;justify-content:center">
+  <div style="background:rgba(28,27,24,0.92);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:38px 44px;width:340px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+    <div style="font-size:28px;margin-bottom:8px">&#128296;</div>
+    <div style="font-size:18px;font-weight:600;color:#f5f4f0;margin-bottom:4px">KMBNO</div>
+    <div style="font-size:12px;color:#a8a59e;margin-bottom:24px">Generator Um&oacute;w z Wykonawcami</div>
+    <input type="email" id="loginEmail" placeholder="E-mail" autocomplete="username"
+      style="width:100%;padding:11px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.3);color:#f5f4f0;font-size:14px;font-family:inherit;box-sizing:border-box;outline:none;margin-bottom:8px"
+      onkeydown="if(event.key==='Enter') document.getElementById('loginPassword').focus()">
+    <input type="password" id="loginPassword" placeholder="Has&#322;o" autocomplete="current-password"
+      style="width:100%;padding:11px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.3);color:#f5f4f0;font-size:14px;font-family:inherit;box-sizing:border-box;outline:none;margin-bottom:10px"
+      onkeydown="if(event.key==='Enter') checkLogin()">
+    <div id="loginError" style="color:#ff6b6b;font-size:12px;margin-bottom:10px;min-height:18px"></div>
+    <button id="loginBtn" onclick="checkLogin()"
+      style="width:100%;padding:11px;background:#f5f4f0;color:#1a1916;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">
+      Zaloguj si&#281;
+    </button>
+  </div>
+</div>
+
+<header>
+  <div class="logo">KMBNO — Generator Umów z Wykonawcami</div>
+  <div style="display:flex;gap:6px;align-items:center">
+    <button id="navGenerator" class="nav-tab active" onclick="switchView('generator')">📄 Generator</button>
+    <button id="navConfig" class="nav-tab" onclick="switchView('config')">⚙ Konfiguracja</button>
+  </div>
+  <div class="subtitle" style="display:flex;align-items:center;gap:10px">
+    <span id="whoami" style="color:rgba(255,255,255,0.6);font-weight:500"></span>
+    <button onclick="logout()" title="Wyloguj się" style="padding:2px 8px;font-size:10px;background:transparent;color:inherit;border:1px solid rgba(255,255,255,0.25);border-radius:4px;cursor:pointer;font-family:inherit">Wyloguj</button>
+  </div>
+</header>
+
+<div class="app" id="appPane">
+<div class="sidebar">
+<div class="sidebar-inner">
+
+  <!-- WYKONAWCA -->
+  <div class="section">
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Wykonawca</span>
+      <button class="btn-mini" onclick="loadWykonawcy(true)" title="Pobierz ponownie z Monday">↻ Odśwież</button>
+    </div>
+    <div class="pills" id="wykTypeGroup" style="margin-bottom:10px">
+      <div class="pill active" data-val="osoba">Osoba fizyczna</div>
+      <div class="pill" data-val="firma">Firma / JDG</div>
+    </div>
+    <div class="search-wrap">
+      <input type="text" id="wykSearch" placeholder="Szukaj po imieniu lub nazwisku..." oninput="searchWyk(this.value)" onfocus="searchWyk(this.value)" autocomplete="off">
+      <div class="dropdown" id="wykDropdown"></div>
+    </div>
+    <div class="selected-badge" id="wykBadge"></div>
+    <div class="hint" id="wykHint">Ładowanie listy z Monday...</div>
+    <div style="margin-top:8px">
+      <a href="#" onclick="toggleManualWyk(event)" style="color:var(--accent);text-decoration:underline;font-size:11px">+ wpisz ręcznie / popraw dane</a>
+    </div>
+    <div id="wykManual" style="display:none;margin-top:8px">
+      <div class="field"><label id="lblWykName">Imię i nazwisko</label><input type="text" id="wName" oninput="renderAll()"></div>
+      <div class="field"><label>Adres (ulica, kod, miejscowość)</label><input type="text" id="wAddr" oninput="renderAll()"></div>
+      <div id="wykOsobaFields">
+        <div class="field-row">
+          <div class="field"><label>PESEL</label><input type="text" id="wPesel" oninput="renderAll()"></div>
+          <div class="field"><label>Nr dowodu</label><input type="text" id="wDowod" oninput="renderAll()"></div>
+        </div>
+      </div>
+      <div id="wykFirmaFields" style="display:none">
+        <div class="field"><label>NIP</label><input type="text" id="wNip" oninput="renderAll()"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INWESTYCJA -->
+  <div class="section">
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Inwestycja / lokal</span>
+      <button class="btn-mini" onclick="loadInwestycje(true)" title="Pobierz ponownie z Monday">↻ Odśwież</button>
+    </div>
+    <div class="search-wrap">
+      <input type="text" id="invSearch" placeholder="Szukaj po adresie..." oninput="searchInv(this.value)" onfocus="searchInv(this.value)" autocomplete="off">
+      <div class="dropdown" id="invDropdown"></div>
+    </div>
+    <div class="selected-badge" id="invBadge"></div>
+    <div class="hint" id="invHint"></div>
+    <div class="field-row" style="margin-top:10px">
+      <div class="field"><label>Miejscowość</label><input type="text" id="pCity" placeholder="np. Iława" oninput="renderAll()"></div>
+      <div class="field" style="flex:0 0 110px"><label>Powierzchnia (m²)</label><input type="text" id="pArea" placeholder="np. 48" oninput="renderAll()"></div>
+    </div>
+    <div class="field"><label>Ulica i numer lokalu</label><input type="text" id="pStreet" placeholder="np. Kościuszki 9/8" oninput="renderAll()"></div>
+    <div class="field">
+      <label>Rodzaj prac (wchodzi do §1 ust. 1)</label>
+      <select id="rodzajPrac" onchange="toggleRodzaj()">
+        <option value="wykończenia mieszkania">wykończenia mieszkania</option>
+        <option value="remontu mieszkania">remontu mieszkania</option>
+        <option value="generalnego remontu mieszkania">generalnego remontu mieszkania</option>
+        <option value="wykończenia lokalu">wykończenia lokalu</option>
+        <option value="remontu domu">remontu domu</option>
+        <option value="custom">własny opis...</option>
+      </select>
+    </div>
+    <div class="field" id="rodzajCustomWrap" style="display:none">
+      <input type="text" id="rodzajCustom" placeholder="np. wykończenia mieszkania wraz z balkonem" oninput="renderAll()">
+    </div>
+  </div>
+
+  <!-- TERMINY -->
+  <div class="section">
+    <div class="section-title">Terminy</div>
+    <div class="field"><label>Data zawarcia umowy</label><input type="date" id="dContract" onchange="renderAll()"></div>
+    <div class="field-row">
+      <div class="field"><label>Rozpoczęcie prac</label><input type="date" id="dStart" onchange="renderAll()"></div>
+      <div class="field"><label>Zakończenie prac</label><input type="date" id="dEnd" onchange="renderAll()"></div>
+    </div>
+    <div class="hint" id="termHint"></div>
+  </div>
+
+  <!-- WYNAGRODZENIE -->
+  <div class="section">
+    <div class="section-title">Wynagrodzenie i warunki</div>
+    <div class="field">
+      <label>Wynagrodzenie brutto (PLN)</label>
+      <input type="number" id="kwota" step="0.01" placeholder="np. 4000" oninput="renderAll()">
+      <div class="hint" id="kwotaSlownie"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Termin płatności FV (dni)</label><input type="number" id="terminFV" value="14" oninput="renderAll()"></div>
+      <div class="field"><label>Kara umowna (% / dzień)</label><input type="number" id="kara" value="1" step="0.5" oninput="renderAll()"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Gwarancja (miesiące)</label><input type="number" id="gwarancja" value="24" oninput="renderAll()"></div>
+      <div class="field"><label>Usuwanie usterek (dni)</label><input type="number" id="usterkiDni" value="3" oninput="renderAll()"></div>
+    </div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2);margin-top:8px">
+        <input type="checkbox" id="gwarWyl" checked onchange="toggleGwarWyl()" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer">
+        Wyłączenie z gwarancji (§7 ust. 1)
+      </label>
+      <input type="text" id="gwarWylText" value="Gwarancja nie dotyczy usługi malowania ścian." oninput="renderAll()" style="margin-top:6px">
+    </div>
+  </div>
+
+  <!-- ZAŁĄCZNIK NR 1 -->
+  <div class="section">
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Załącznik nr 1 — zakres prac</span>
+      <button class="btn-mini" onclick="reloadZakresFromMonday()" title="Wczytaj ponownie zakres z Monday">↻ Z Monday</button>
+    </div>
+    <div class="field">
+      <label>Tytuł załącznika</label>
+      <input type="text" id="zalTitle" value="ZAKRES REMONTU" oninput="renderAll()">
+    </div>
+    <div class="field">
+      <label>Zakres prac — jeden punkt w linii</label>
+      <textarea id="zakres" rows="12" placeholder="Prace ogólne - wszystkie pomieszczenia&#10;usunięcie wszystkich elementów ze ścian: haczyków, kołków, gwoździ,&#10;gruntowanie i malowanie na biało ścian,&#10;&#10;Łazienka:&#10;wymiana silikonów," oninput="renderAll()"></textarea>
+      <div class="hint">
+        Nagłówek sekcji: linia zaczynająca się od <strong>#</strong> lub zakończona <strong>dwukropkiem</strong>
+        (rozpoznawane są też krótkie linie przed listą, np. „Prace ogólne - wszystkie pomieszczenia").
+        Pozostałe linie stają się punktami listy. Puste linie oddzielają sekcje.
+      </div>
+    </div>
+  </div>
+
+  <!-- DODATKOWE PARAGRAFY -->
+  <div class="section">
+    <div class="section-title">Dodatkowe paragrafy <span style="font-size:10px;font-weight:400;color:var(--text3)">(max 3, wstawiane przed §8)</span></div>
+    <div id="extraParsWrap"></div>
+    <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px;margin-top:4px" onclick="addExtraPar()" id="addExtraParBtn">+ Dodaj paragraf</button>
+  </div>
+
+  <!-- HISTORIA -->
+  <div class="section" id="historySection">
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Historia umów</span>
+      <button class="btn-mini" style="background:var(--green-bg);color:var(--green);border-color:var(--green-border)" onclick="saveToHistory()">Zapisz bieżącą</button>
+    </div>
+    <div id="historyList" style="margin-top:6px"></div>
+  </div>
+
+</div><!-- sidebar-inner -->
+
+<div class="btn-row">
+  <button class="btn btn-primary" onclick="renderAll(true)">Generuj umowę</button>
+  <button class="btn btn-secondary" onclick="downloadHTML()">PDF / Druk</button>
+</div>
+</div><!-- sidebar -->
+
+<div class="preview-pane" id="previewPane">
+  <div class="empty-state">
+    <div class="icon">📄</div>
+    <p>Wypełnij formularz i kliknij „Generuj umowę"</p>
+  </div>
+</div>
+
+</div><!-- app -->
+
+<!-- ═══════════ KONFIGURACJA ═══════════ -->
+<div class="cfg-pane" id="cfgPane">
+
+  <div class="cfg-card">
+    <h2>Połączenie z Monday</h2>
+    <div class="cd">
+      Generator pobiera dane wykonawców i zakres prac przez API Monday. Token nie jest zapisany w kodzie —
+      trzymany jest w bazie Supabase (widoczny tylko dla zalogowanych) albo, awaryjnie, w pamięci tej przeglądarki.
+    </div>
+    <div class="field">
+      <label>Adres funkcji proxy (opcjonalnie, najbezpieczniejszy wariant)</label>
+      <input type="text" id="cfgProxy" placeholder="https://xxxx.supabase.co/functions/v1/monday">
+      <div class="hint">Jeśli wypełnione, generator w ogóle nie widzi tokena — pyta funkcję w Supabase. Puste = używa tokena poniżej.</div>
+    </div>
+    <div class="field">
+      <label>Token API Monday</label>
+      <input type="password" id="cfgToken" placeholder="wklej token z Monday → Developers → My access tokens">
+      <div class="hint" id="cfgTokenState"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-primary" style="flex:0;padding:9px 18px" onclick="saveTokenShared()">Zapisz dla całego zespołu</button>
+      <button class="btn btn-secondary" style="flex:0;padding:9px 18px" onclick="saveTokenLocal()">Zapisz tylko w tej przeglądarce</button>
+      <button class="btn btn-secondary" style="flex:0;padding:9px 18px" onclick="testMonday()">Sprawdź połączenie</button>
+    </div>
+    <div id="cfgTestResult" style="margin-top:10px;font-size:12px"></div>
+  </div>
+
+  <div class="cfg-card">
+    <h2>Tablice i kolumny</h2>
+    <div class="cd">
+      Wybierz tablice, a kolumny dopasują się automatycznie po nazwach. Jeśli coś trafi nie tam, gdzie powinno — popraw ręcznie.
+    </div>
+    <div class="field">
+      <label>Tablica z wykonawcami</label>
+      <select id="cfgBoardWyk" onchange="onBoardChange('wyk')"><option value="">— najpierw sprawdź połączenie —</option></select>
+    </div>
+    <div id="mapWykWrap" style="margin-top:10px"></div>
+
+    <div class="field" style="margin-top:20px">
+      <label>Tablica z zakresem prac / inwestycjami</label>
+      <select id="cfgBoardInv" onchange="onBoardChange('inv')"><option value="">— najpierw sprawdź połączenie —</option></select>
+    </div>
+    <div id="mapInvWrap" style="margin-top:10px"></div>
+
+    <div style="display:flex;gap:8px;margin-top:18px">
+      <button class="btn btn-primary" style="flex:0;padding:9px 18px" onclick="saveConfig(true)">Zapisz dla całego zespołu</button>
+      <button class="btn btn-secondary" style="flex:0;padding:9px 18px" onclick="saveConfig(false)">Zapisz lokalnie</button>
+    </div>
+    <div id="cfgSaveResult" style="margin-top:10px;font-size:12px"></div>
+  </div>
+
+  <div class="cfg-card">
+    <h2>Dane Zamawiającego</h2>
+    <div class="cd">Blok firmy wstawiany na początku każdej umowy.</div>
+    <div class="field"><label>Nazwa</label><input type="text" id="cfgFirmName" value="KMBNO Sp. z o.o." oninput="renderAll()"></div>
+    <div class="field"><label>Adres (każda linia osobno)</label><textarea id="cfgFirmAddr" rows="2" oninput="renderAll()">ul. Twarda 18
+00-105 Warszawa</textarea></div>
+    <div class="field"><label>NIP</label><input type="text" id="cfgFirmNip" value="525-286-23-30" oninput="renderAll()"></div>
+  </div>
+
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   KMBNO — Generator Umów z Wykonawcami
+   Wzór: "Umowa o roboty budowlane" + Załącznik nr 1 (zakres remontu)
+   Dane wykonawcy i zakres prac: Monday. Logowanie i historia: Supabase.
+   ══════════════════════════════════════════════════════════════ */
+
+const SUPABASE_URL = 'https://pzxflijplvjllqdihzcx.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_jQU2I5xT_zYL8hTnZWcD6g_joVgETCw';
+const TABLE_UMOWY  = 'umowy_wykonawcy';
+const TABLE_USTAW  = 'ustawienia';
+const LS_TOKEN     = 'kmbno_monday_token';
+const LS_CFG       = 'kmbno_wyk_cfg';
+
+let sb = null, currentUser = null;
+let mondayToken = '';
+let historyCache = [];
+
+/* Domyślne tablice Monday (KMBNO).
+   Wykonawcy:     https://kmbno.monday.com/boards/5030474320
+   Zakres remontu: https://kmbno.monday.com/boards/5030474286
+   ID kolumn nie są wpisane na sztywno — generator pobiera listę kolumn
+   z tablicy i dopasowuje je po nazwach (patrz PATTERNS + autoMap). */
+const DEFAULT_BOARD_WYK = '5030474320';
+const DEFAULT_BOARD_INV = '5030474286';
+
+let CFG = {
+  proxyUrl: '',
+  boardWyk: DEFAULT_BOARD_WYK,
+  boardInv: DEFAULT_BOARD_INV,
+  mapWyk: { addr:'', pesel:'', dowod:'', nip:'' },
+  mapInv: { zakres:'', area:'', city:'', street:'' }
+};
+
+let wykonawcy = [];
+let inwestycje = [];
+let boardsCache = [];
+let columnsCache = {};
+let state = { wykType: 'osoba', wyk: null, inv: null };
+let searchTimeout = null;
+
+/* ─────────────── Logowanie (Supabase) ─────────────── */
+
+function userLabel(email) {
+  if (!email) return 'Nieznany';
+  const n = email.split('@')[0].replace(/[._-]+/g, ' ').trim();
+  return n.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+async function initAuth() {
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const { data } = await sb.auth.getSession();
+  if (data && data.session) {
+    currentUser = data.session.user;
+    showApp();
+  } else {
+    document.getElementById('loginScreen').style.display = 'flex';
+  }
+}
+
+async function checkLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPassword').value;
+  const err   = document.getElementById('loginError');
+  const btn   = document.getElementById('loginBtn');
+  if (!email || !pass) { err.textContent = 'Podaj e-mail i hasło'; return; }
+  btn.disabled = true; btn.textContent = 'Logowanie...'; err.textContent = '';
+  try {
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+    if (error) {
+      err.textContent = error.message.includes('Invalid login')
+        ? 'Nieprawidłowy e-mail lub hasło' : error.message;
+      btn.disabled = false; btn.textContent = 'Zaloguj się';
+      return;
+    }
+    currentUser = data.user;
+    showApp();
+  } catch(e) {
+    err.textContent = 'Brak połączenia z serwerem';
+    btn.disabled = false; btn.textContent = 'Zaloguj się';
+  }
+}
+
+async function logout() {
+  if (!confirm('Wylogować się?')) return;
+  await sb.auth.signOut();
+  location.reload();
+}
+
+async function showApp() {
+  const s = document.getElementById('loginScreen');
+  if (s) s.style.display = 'none';
+  const who = document.getElementById('whoami');
+  if (who) who.textContent = userLabel(currentUser && currentUser.email);
+
+  initDefaults();
+  await loadConfig();
+  await loadToken();
+  renderHistory();
+  await loadWykonawcy();
+  await loadInwestycje();
+}
+
+/* ─────────────── Ustawienia (Supabase → localStorage) ─────────────── */
+
+async function ustawGet(key) {
+  try {
+    const { data, error } = await sb.from(TABLE_USTAW).select('wartosc').eq('klucz', key).maybeSingle();
+    if (error) throw error;
+    return data ? data.wartosc : null;
+  } catch(e) { return null; }
+}
+
+async function ustawSet(key, value) {
+  const { error } = await sb.from(TABLE_USTAW).upsert({ klucz: key, wartosc: value }, { onConflict: 'klucz' });
+  if (error) throw error;
+}
+
+async function loadConfig() {
+  let cfg = await ustawGet('konfiguracja_wykonawcy');
+  if (!cfg) {
+    try { cfg = JSON.parse(localStorage.getItem(LS_CFG) || 'null'); } catch(e) { cfg = null; }
+  }
+  if (cfg) {
+    CFG = Object.assign({}, CFG, cfg);
+    CFG.mapWyk = Object.assign({ addr:'', pesel:'', dowod:'', nip:'' }, cfg.mapWyk || {});
+    CFG.mapInv = Object.assign({ zakres:'', area:'', city:'', street:'' }, cfg.mapInv || {});
+  }
+  const p = document.getElementById('cfgProxy');
+  if (p) p.value = CFG.proxyUrl || '';
+}
+
+async function saveConfig(shared) {
+  CFG.proxyUrl = (document.getElementById('cfgProxy').value || '').trim();
+  CFG.boardWyk = document.getElementById('cfgBoardWyk').value || '';
+  CFG.boardInv = document.getElementById('cfgBoardInv').value || '';
+  ['addr','pesel','dowod','nip'].forEach(k => {
+    const el = document.getElementById('mapWyk_' + k);
+    if (el) CFG.mapWyk[k] = el.value || '';
+  });
+  ['zakres','area','city','street'].forEach(k => {
+    const el = document.getElementById('mapInv_' + k);
+    if (el) CFG.mapInv[k] = el.value || '';
+  });
+
+  const out = document.getElementById('cfgSaveResult');
+  try {
+    localStorage.setItem(LS_CFG, JSON.stringify(CFG));
+    if (shared) {
+      await ustawSet('konfiguracja_wykonawcy', CFG);
+      out.innerHTML = '<span style="color:var(--green)">✓ Zapisano dla całego zespołu.</span>';
+    } else {
+      out.innerHTML = '<span style="color:var(--green)">✓ Zapisano w tej przeglądarce.</span>';
+    }
+    await loadWykonawcy(true);
+    await loadInwestycje(true);
+  } catch(e) {
+    out.innerHTML = '<span style="color:var(--red)">Nie udało się zapisać do Supabase: ' + esc(e.message || e) +
+      '<br>Ustawienia zostały zapisane lokalnie. Sprawdź, czy tabela „' + TABLE_USTAW + '" istnieje (patrz README).</span>';
+  }
+}
+
+async function loadToken() {
+  if (CFG.proxyUrl) { mondayToken = ''; updateTokenState('Używana jest funkcja proxy — token nie jest potrzebny w przeglądarce.'); return; }
+  const shared = await ustawGet('monday_token');
+  if (shared && typeof shared === 'string' && shared.length > 20) {
+    mondayToken = shared;
+    updateTokenState('Token wczytany z Supabase (wspólny dla zespołu).');
+    return;
+  }
+  if (shared && shared.token) {
+    mondayToken = shared.token;
+    updateTokenState('Token wczytany z Supabase (wspólny dla zespołu).');
+    return;
+  }
+  const local = localStorage.getItem(LS_TOKEN) || '';
+  mondayToken = local;
+  updateTokenState(local ? 'Token zapisany tylko w tej przeglądarce.' : 'Brak tokena — uzupełnij w Konfiguracji.');
+}
+
+function updateTokenState(msg) {
+  const el = document.getElementById('cfgTokenState');
+  if (el) el.textContent = msg;
+}
+
+async function saveTokenShared() {
+  const t = (document.getElementById('cfgToken').value || '').trim();
+  const out = document.getElementById('cfgTestResult');
+  if (!t) { out.innerHTML = '<span style="color:var(--red)">Wklej najpierw token.</span>'; return; }
+  try {
+    await ustawSet('monday_token', t);
+    mondayToken = t;
+    updateTokenState('Token wczytany z Supabase (wspólny dla zespołu).');
+    out.innerHTML = '<span style="color:var(--green)">✓ Token zapisany w Supabase — reszta zespołu nie musi go już wklejać.</span>';
+  } catch(e) {
+    out.innerHTML = '<span style="color:var(--red)">Nie udało się zapisać: ' + esc(e.message || e) +
+      '<br>Sprawdź, czy tabela „' + TABLE_USTAW + '" istnieje i ma politykę zapisu dla zalogowanych (patrz README).</span>';
+  }
+}
+
+function saveTokenLocal() {
+  const t = (document.getElementById('cfgToken').value || '').trim();
+  const out = document.getElementById('cfgTestResult');
+  if (!t) { out.innerHTML = '<span style="color:var(--red)">Wklej najpierw token.</span>'; return; }
+  localStorage.setItem(LS_TOKEN, t);
+  mondayToken = t;
+  updateTokenState('Token zapisany tylko w tej przeglądarce.');
+  out.innerHTML = '<span style="color:var(--green)">✓ Token zapisany w tej przeglądarce.</span>';
+}
+
+/* ─────────────── Warstwa Monday ─────────────── */
+
+async function mondayQuery(query) {
+  if (CFG.proxyUrl) {
+    const { data } = await sb.auth.getSession();
+    const jwt = data && data.session ? data.session.access_token : '';
+    const res = await fetch(CFG.proxyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+      body: JSON.stringify({ query })
+    });
+    if (!res.ok) throw new Error('Proxy odpowiedziało ' + res.status);
+    return res.json();
+  }
+  if (!mondayToken) throw new Error('Brak tokena Monday — uzupełnij w Konfiguracji');
+  const res = await fetch('https://api.monday.com/v2', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': mondayToken, 'API-Version': '2024-01' },
+    body: JSON.stringify({ query })
+  });
+  return res.json();
+}
+
+async function mondayBoards() {
+  const r = await mondayQuery('{boards(limit:200, state:active){id name}}');
+  if (r.errors) throw new Error(r.errors[0].message || 'Błąd API Monday');
+  return (r.data && r.data.boards) ? r.data.boards : [];
+}
+
+async function mondayColumns(boardId) {
+  if (columnsCache[boardId]) return columnsCache[boardId];
+  const r = await mondayQuery('{boards(ids:[' + boardId + ']){columns{id title type}}}');
+  if (r.errors) throw new Error(r.errors[0].message || 'Błąd API Monday');
+  const cols = (r.data && r.data.boards && r.data.boards[0]) ? r.data.boards[0].columns : [];
+  columnsCache[boardId] = cols;
+  return cols;
+}
+
+async function mondayItems(boardId, colIds) {
+  const ids = colIds.filter(Boolean);
+  const colPart = ids.length ? 'column_values(ids:[' + ids.map(i => '"' + i + '"').join(',') + ']){id text}' : '';
+  let cursor = null;
+  const out = [];
+  do {
+    const cursorStr = cursor ? ', cursor: "' + cursor + '"' : '';
+    const q = '{boards(ids:[' + boardId + ']){items_page(limit:500' + cursorStr + '){cursor items{id name ' + colPart + '}}}}';
+    const r = await mondayQuery(q);
+    if (r.errors) throw new Error(r.errors[0].message || 'Błąd API Monday');
+    const page = r.data && r.data.boards && r.data.boards[0] ? r.data.boards[0].items_page : null;
+    if (!page) break;
+    page.items.forEach(it => {
+      if (!it.name || !it.name.trim() || it.name.trim() === 'Nowy') return;
+      const cv = {};
+      (it.column_values || []).forEach(c => { cv[c.id] = c.text || ''; });
+      out.push({ id: it.id, name: it.name.trim(), cv: cv });
+    });
+    cursor = page.cursor || null;
+  } while (cursor);
+  return out;
+}
+
+/* Automatyczne dopasowanie kolumn po nazwie */
+const PATTERNS = {
+  addr:   [/adres.*zamieszk/i, /^adres/i, /zamieszkan/i, /ulica/i],
+  pesel:  [/pesel/i],
+  dowod:  [/dow[oó]d/i, /seria.*numer/i, /nr.*dowodu/i],
+  nip:    [/^nip/i, /nip/i],
+  zakres: [/zakres.*remont/i, /zakres.*prac/i, /zakres/i, /prace/i],
+  area:   [/powierzchni/i, /metra/i, /\bm2\b/i, /m²/i],
+  city:   [/miejscowo/i, /miasto/i],
+  street: [/ulica/i, /^adres/i, /lokalizacj/i]
+};
+
+function autoMap(cols, keys) {
+  const map = {};
+  keys.forEach(k => {
+    const pats = PATTERNS[k] || [];
+    let found = '';
+    for (const p of pats) {
+      const hit = cols.find(c => p.test(c.title));
+      if (hit) { found = hit.id; break; }
+    }
+    map[k] = found;
+  });
+  return map;
+}
+
+/* Jeśli mapowanie kolumn nie było jeszcze zapisane (albo wskazuje na kolumny,
+   których w tablicy już nie ma) — dopasuj je automatycznie po nazwach. */
+async function ensureMapping(which) {
+  const boardId = which === 'wyk' ? CFG.boardWyk : CFG.boardInv;
+  const keys = which === 'wyk' ? ['addr','pesel','dowod','nip'] : ['zakres','area','city','street'];
+  const map = which === 'wyk' ? CFG.mapWyk : CFG.mapInv;
+  if (!boardId) return map;
+  const cols = await mondayColumns(boardId);
+  const known = cols.map(c => c.id);
+  const valid = keys.some(k => map[k] && known.indexOf(map[k]) > -1);
+  if (valid) return map;
+  const auto = autoMap(cols, keys);
+  keys.forEach(k => { map[k] = auto[k]; });
+  return map;
+}
+
+const MAP_LABELS = {
+  addr: 'Adres', pesel: 'PESEL', dowod: 'Nr dowodu', nip: 'NIP',
+  zakres: 'Zakres prac', area: 'Powierzchnia', city: 'Miejscowość', street: 'Ulica / lokalizacja'
+};
+
+function renderMapUI(which, cols, map) {
+  const keys = which === 'wyk' ? ['addr','pesel','dowod','nip'] : ['zakres','area','city','street'];
+  const wrap = document.getElementById(which === 'wyk' ? 'mapWykWrap' : 'mapInvWrap');
+  if (!wrap) return;
+  const opts = c => '<option value="">— brak —</option>' + cols.map(col =>
+    '<option value="' + col.id + '"' + (col.id === c ? ' selected' : '') + '>' + esc(col.title) + ' (' + col.type + ')</option>'
+  ).join('');
+  wrap.innerHTML = '<div class="map-grid">' + keys.map(k =>
+    '<label>' + MAP_LABELS[k] + '</label><select id="map' + (which === 'wyk' ? 'Wyk_' : 'Inv_') + k + '">' + opts(map[k] || '') + '</select>'
+  ).join('') + '</div>';
+}
+
+async function onBoardChange(which) {
+  const sel = document.getElementById(which === 'wyk' ? 'cfgBoardWyk' : 'cfgBoardInv');
+  const boardId = sel.value;
+  const wrap = document.getElementById(which === 'wyk' ? 'mapWykWrap' : 'mapInvWrap');
+  if (!boardId) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = '<div class="loading-badge">Pobieranie kolumn...</div>';
+  try {
+    const cols = await mondayColumns(boardId);
+    const keys = which === 'wyk' ? ['addr','pesel','dowod','nip'] : ['zakres','area','city','street'];
+    const existing = which === 'wyk' ? CFG.mapWyk : CFG.mapInv;
+    const known = cols.map(c => c.id);
+    const hasExisting = keys.some(k => existing[k] && known.indexOf(existing[k]) > -1);
+    const map = hasExisting ? existing : autoMap(cols, keys);
+    renderMapUI(which, cols, map);
+  } catch(e) {
+    wrap.innerHTML = '<div style="color:var(--red);font-size:12px">' + esc(e.message || e) + '</div>';
+  }
+}
+
+async function testMonday() {
+  const out = document.getElementById('cfgTestResult');
+  const typed = (document.getElementById('cfgToken').value || '').trim();
+  if (typed) mondayToken = typed;
+  out.innerHTML = '<span style="color:var(--text3)">Sprawdzam...</span>';
+  try {
+    boardsCache = await mondayBoards();
+    const fill = (id, chosen) => {
+      const sel = document.getElementById(id);
+      sel.innerHTML = '<option value="">— wybierz tablicę —</option>' + boardsCache.map(b =>
+        '<option value="' + b.id + '"' + (b.id === chosen ? ' selected' : '') + '>' + esc(b.name) + ' (' + b.id + ')</option>'
+      ).join('');
+    };
+    fill('cfgBoardWyk', CFG.boardWyk);
+    fill('cfgBoardInv', CFG.boardInv);
+    out.innerHTML = '<span style="color:var(--green)">✓ Połączono. Widocznych tablic: ' + boardsCache.length + '. Wybierz je poniżej.</span>';
+    if (CFG.boardWyk) await onBoardChange('wyk');
+    if (CFG.boardInv) await onBoardChange('inv');
+  } catch(e) {
+    out.innerHTML = '<span style="color:var(--red)">Nie udało się: ' + esc(e.message || e) + '</span>';
+  }
+}
+
+/* ─────────────── Wykonawcy z Monday ─────────────── */
+
+async function loadWykonawcy(force) {
+  const hint = document.getElementById('wykHint');
+  if (!CFG.boardWyk) { hint.innerHTML = 'Tablica z wykonawcami nie jest jeszcze wybrana — <a href="#" onclick="switchView(\'config\');return false" style="color:var(--accent)">otwórz Konfigurację</a>.'; return; }
+  if (wykonawcy.length && !force) return;
+  hint.textContent = 'Pobieranie wykonawców z Monday...';
+  try {
+    const m = await ensureMapping('wyk');
+    const items = await mondayItems(CFG.boardWyk, [m.addr, m.pesel, m.dowod, m.nip]);
+    wykonawcy = items.map(it => ({
+      id: it.id,
+      name: it.name,
+      addr: it.cv[m.addr] || '',
+      pesel: it.cv[m.pesel] || '',
+      dowod: it.cv[m.dowod] || '',
+      nip: it.cv[m.nip] || ''
+    })).sort((a,b) => a.name.localeCompare(b.name, 'pl'));
+    hint.textContent = wykonawcy.length + ' wykonawców z Monday';
+  } catch(e) {
+    hint.innerHTML = '<span style="color:var(--red)">Nie udało się pobrać wykonawców: ' + esc(e.message || e) + '</span><br>Dane możesz wpisać ręcznie poniżej.';
+  }
+}
+
+function searchWyk(val) {
+  clearTimeout(searchTimeout);
+  const dd = document.getElementById('wykDropdown');
+  if (!val || val.length < 2) { dd.classList.remove('open'); return; }
+  searchTimeout = setTimeout(() => {
+    const q = val.toLowerCase();
+    const res = wykonawcy.filter(w => w.name.toLowerCase().includes(q)).slice(0, 10);
+    if (!res.length) {
+      dd.innerHTML = '<div class="dd-item"><div class="dn" style="color:#a8a59e">Brak wyników</div></div>';
+      dd.classList.add('open'); return;
+    }
+    dd.innerHTML = res.map(w =>
+      '<div class="dd-item" onclick="selectWyk(\'' + w.id + '\')"><div class="dn">' + esc(w.name) + '</div><div class="da">' + esc(w.addr || '') + '</div></div>'
+    ).join('');
+    dd.classList.add('open');
+  }, 180);
+}
+
+function selectWyk(id) {
+  const w = wykonawcy.find(x => x.id === id);
+  if (!w) return;
+  state.wyk = w;
+  document.getElementById('wykDropdown').classList.remove('open');
+  document.getElementById('wykSearch').value = w.name;
+  setVal('wName', w.name); setVal('wAddr', w.addr);
+  setVal('wPesel', w.pesel); setVal('wDowod', w.dowod); setVal('wNip', w.nip);
+  const b = document.getElementById('wykBadge');
+  b.style.display = 'block';
+  b.innerHTML = '<strong>' + esc(w.name) + '</strong>' +
+    (w.addr ? '<br>' + esc(w.addr) : '') +
+    (w.pesel ? '<br>PESEL: ' + esc(w.pesel) : '') +
+    (w.dowod ? ' · dow. ' + esc(w.dowod) : '') +
+    (w.nip ? '<br>NIP: ' + esc(w.nip) : '');
+  const missing = [];
+  if (!w.addr) missing.push('adres');
+  if (state.wykType === 'osoba') { if (!w.pesel) missing.push('PESEL'); if (!w.dowod) missing.push('nr dowodu'); }
+  else if (!w.nip) missing.push('NIP');
+  if (missing.length) {
+    b.innerHTML += '<div style="color:var(--warn-text);background:var(--warn-bg);border:1px solid var(--warn-border);border-radius:6px;padding:5px 7px;margin-top:6px">Brakuje w Monday: ' + missing.join(', ') + ' — uzupełnij ręcznie poniżej.</div>';
+    document.getElementById('wykManual').style.display = 'block';
+  }
+  renderAll();
+}
+
+function toggleManualWyk(e) {
+  e.preventDefault();
+  const wrap = document.getElementById('wykManual');
+  wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+}
+
+/* ─────────────── Inwestycje / zakres z Monday ─────────────── */
+
+async function loadInwestycje(force) {
+  const hint = document.getElementById('invHint');
+  if (!CFG.boardInv) { hint.innerHTML = 'Tablica z zakresem prac nie jest wybrana — <a href="#" onclick="switchView(\'config\');return false" style="color:var(--accent)">otwórz Konfigurację</a>.'; return; }
+  if (inwestycje.length && !force) return;
+  hint.textContent = 'Pobieranie inwestycji z Monday...';
+  try {
+    const m = await ensureMapping('inv');
+    const items = await mondayItems(CFG.boardInv, [m.zakres, m.area, m.city, m.street]);
+    inwestycje = items.map(it => ({
+      id: it.id,
+      name: it.name,
+      zakres: it.cv[m.zakres] || '',
+      area: it.cv[m.area] || '',
+      city: it.cv[m.city] || '',
+      street: it.cv[m.street] || ''
+    }));
+    hint.textContent = inwestycje.length + ' pozycji z Monday';
+  } catch(e) {
+    hint.innerHTML = '<span style="color:var(--red)">Nie udało się pobrać: ' + esc(e.message || e) + '</span><br>Dane możesz wpisać ręcznie.';
+  }
+}
+
+function searchInv(val) {
+  clearTimeout(searchTimeout);
+  const dd = document.getElementById('invDropdown');
+  if (!val || val.length < 2) { dd.classList.remove('open'); return; }
+  searchTimeout = setTimeout(() => {
+    const q = val.toLowerCase();
+    const res = inwestycje.filter(p => p.name.toLowerCase().includes(q) || (p.street||'').toLowerCase().includes(q)).slice(0, 10);
+    if (!res.length) {
+      dd.innerHTML = '<div class="dd-item"><div class="dn" style="color:#a8a59e">Brak wyników</div></div>';
+      dd.classList.add('open'); return;
+    }
+    dd.innerHTML = res.map(p =>
+      '<div class="dd-item" onclick="selectInv(\'' + p.id + '\')"><div class="dn">' + esc(p.name) + '</div><div class="da">' +
+      esc([p.city, p.street].filter(Boolean).join(', ')) + (p.area ? ' · ' + esc(p.area) + ' m²' : '') +
+      (p.zakres ? ' · zakres ✓' : ' · brak zakresu') + '</div></div>'
+    ).join('');
+    dd.classList.add('open');
+  }, 180);
+}
+
+function selectInv(id) {
+  const p = inwestycje.find(x => x.id === id);
+  if (!p) return;
+  state.inv = p;
+  document.getElementById('invDropdown').classList.remove('open');
+  document.getElementById('invSearch').value = p.name;
+
+  const parsed = splitLocation(p, p.name);
+  if (parsed.city) setVal('pCity', parsed.city);
+  if (parsed.street) setVal('pStreet', parsed.street);
+  if (p.area) setVal('pArea', cleanArea(p.area));
+  if (p.zakres) setVal('zakres', p.zakres.trim());
+
+  const b = document.getElementById('invBadge');
+  b.style.display = 'block';
+  b.innerHTML = '<strong>' + esc(p.name) + '</strong>' +
+    (p.area ? '<br>Powierzchnia: ' + esc(cleanArea(p.area)) + ' m²' : '') +
+    (p.zakres ? '<br>Zakres prac wczytany (' + p.zakres.trim().split(/\n/).filter(l => l.trim()).length + ' linii)'
+              : '<div style="color:var(--warn-text);background:var(--warn-bg);border:1px solid var(--warn-border);border-radius:6px;padding:5px 7px;margin-top:6px">W Monday nie ma zakresu prac dla tej pozycji — wpisz go ręcznie.</div>');
+  renderAll();
+}
+
+/* Z nazwy pozycji "TARNOWSKIE GÓRY, Andersa 49/29" wyciąga miejscowość i ulicę */
+function splitLocation(p, fallbackName) {
+  let city = (p.city || '').trim();
+  let street = (p.street || '').trim();
+  if (city && street) return { city: city, street: street };
+  const src = (street || fallbackName || '').trim();
+  const parts = src.split(',');
+  if (parts.length >= 2) {
+    if (!city) city = titleCasePl(parts[0].trim());
+    if (!street || street === src) street = parts.slice(1).join(',').trim();
+  } else if (!city) {
+    street = src;
+  }
+  return { city: city, street: street };
+}
+
+function titleCasePl(s) {
+  if (!s) return s;
+  if (s !== s.toUpperCase()) return s;
+  return s.toLowerCase().split(/(\s+|-)/).map(w =>
+    /^\s+$/.test(w) || w === '-' ? w : w.charAt(0).toUpperCase() + w.slice(1)
+  ).join('');
+}
+
+function cleanArea(a) {
+  return (a || '').toString().replace(/m2|m²/gi, '').replace(/\s+/g, '').trim();
+}
+
+async function reloadZakresFromMonday() {
+  if (!state.inv) { alert('Najpierw wybierz inwestycję z listy.'); return; }
+  await loadInwestycje(true);
+  const fresh = inwestycje.find(x => x.id === state.inv.id);
+  if (!fresh) { alert('Nie znalazłem tej pozycji w Monday.'); return; }
+  if (!fresh.zakres) { alert('W Monday nie ma zakresu prac dla tej pozycji.'); return; }
+  setVal('zakres', fresh.zakres.trim());
+  state.inv = fresh;
+  renderAll(true);
+}
+
+/* ─────────────── Formularz: pomocnicze ─────────────── */
+
+function g(id) { const el = document.getElementById(id); return el ? (el.value || '').trim() : ''; }
+function setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v || ''; }
+
+function esc(s) {
+  return (s == null ? '' : String(s))
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function initPills(id, key, cb) {
+  const host = document.getElementById(id);
+  if (!host) return;
+  host.addEventListener('click', e => {
+    const p = e.target.closest('.pill');
+    if (!p) return;
+    host.querySelectorAll('.pill').forEach(x => x.classList.remove('active'));
+    p.classList.add('active');
+    state[key] = p.dataset.val;
+    if (cb) cb(p.dataset.val);
+  });
+}
+
+function initDefaults() {
+  const t = new Date();
+  const iso = d => d.toISOString().slice(0, 10);
+  if (!g('dContract')) setVal('dContract', iso(t));
+  initPills('wykTypeGroup', 'wykType', v => {
+    document.getElementById('wykOsobaFields').style.display = v === 'osoba' ? 'block' : 'none';
+    document.getElementById('wykFirmaFields').style.display = v === 'firma' ? 'block' : 'none';
+    document.getElementById('lblWykName').textContent = v === 'osoba' ? 'Imię i nazwisko' : 'Nazwa firmy';
+    document.getElementById('wykSearch').placeholder = v === 'osoba' ? 'Szukaj po imieniu lub nazwisku...' : 'Szukaj po nazwie firmy...';
+    renderAll();
+  });
+}
+
+function toggleRodzaj() {
+  document.getElementById('rodzajCustomWrap').style.display = g('rodzajPrac') === 'custom' ? 'block' : 'none';
+  renderAll();
+}
+function toggleGwarWyl() {
+  document.getElementById('gwarWylText').style.display = document.getElementById('gwarWyl').checked ? 'block' : 'none';
+  renderAll();
+}
+
+function fmtDate(d) {
+  if (!d) return '';
+  const parts = d.split('-');
+  if (parts.length !== 3) return d;
+  return parts[2] + '.' + parts[1] + '.' + parts[0];
+}
+
+function parseMoney(n) {
+  if (n === '' || n == null) return null;
+  const num = parseFloat(('' + n).replace(/\s/g, '').replace(',', '.'));
+  return isNaN(num) ? null : num;
+}
+
+function fmtMoney(n) {
+  const num = parseMoney(n);
+  if (num === null) return '';
+  const hasGrosze = Math.round(num * 100) % 100 !== 0;
+  return num.toLocaleString('pl-PL', {
+    minimumFractionDigits: hasGrosze ? 2 : 0,
+    maximumFractionDigits: 2
+  }).replace(/[  \s]/g, ' ');
+}
+
+/* Odmiana "tysiąc/tysiące/tysięcy" i "milion/miliony/milionów"
+   zależy od ostatnich cyfr: 1 → tysiąc, 2-4 → tysiące, 12-14 → tysięcy, reszta → tysięcy */
+function plural3(n, one, few, many) {
+  const l2 = n % 100, l1 = n % 10;
+  if (n === 1) return one;
+  if (l2 >= 12 && l2 <= 14) return many;
+  if (l1 >= 2 && l1 <= 4) return few;
+  return many;
+}
+
+function numberToWords(n) {
+  const u = ['','jeden','dwa','trzy','cztery','pięć','sześć','siedem','osiem','dziewięć','dziesięć','jedenaście','dwanaście','trzynaście','czternaście','piętnaście','szesnaście','siedemnaście','osiemnaście','dziewiętnaście'];
+  const t = ['','','dwadzieścia','trzydzieści','czterdzieści','pięćdziesiąt','sześćdziesiąt','siedemdziesiąt','osiemdziesiąt','dziewięćdziesiąt'];
+  const h = ['','sto','dwieście','trzysta','czterysta','pięćset','sześćset','siedemset','osiemset','dziewięćset'];
+  if (n === '' || n == null || isNaN(n)) return '';
+  n = parseInt(n, 10);
+  if (n === 0) return 'zero';
+  let r = '';
+  if (n >= 1000000) {
+    const m = Math.floor(n / 1000000);
+    r += numberToWords(m) + ' ' + plural3(m, 'milion', 'miliony', 'milionów') + ' ';
+    n %= 1000000;
+  }
+  if (n >= 1000) {
+    const th = Math.floor(n / 1000);
+    r += (th === 1 ? 'tysiąc' : numberToWords(th) + ' ' + plural3(th, 'tysiąc', 'tysiące', 'tysięcy')) + ' ';
+    n %= 1000;
+  }
+  if (n >= 100) { r += h[Math.floor(n / 100)] + ' '; n %= 100; }
+  if (n >= 20) { r += t[Math.floor(n / 10)] + ' '; n %= 10; }
+  if (n > 0) r += u[n] + ' ';
+  return r.replace(/\s+/g, ' ').trim();
+}
+
+/* "24500.5" → "dwadzieścia cztery tysiące pięćset złotych 50/100" */
+function moneyToWords(n) {
+  const num = parseMoney(n);
+  if (num === null) return '';
+  const zl = Math.floor(num);
+  const gr = Math.round((num - zl) * 100);
+  const zlWords = numberToWords(zl);
+  const zlName = plural3(zl, 'złoty', 'złote', 'złotych');
+  return zlWords + ' ' + zlName + ' ' + String(gr).padStart(2, '0') + '/100';
+}
+
+function blank(val) {
+  const v = (val || '').trim();
+  return v ? '<span class="blank f">' + esc(v) + '</span>'
+           : '<span class="blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>';
+}
+
+/* ─────────────── Dodatkowe paragrafy ─────────────── */
+
+function addExtraPar(text) {
+  const wrap = document.getElementById('extraParsWrap');
+  if (wrap.children.length >= 3) return;
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;align-items:flex-start';
+  const ta = document.createElement('textarea');
+  ta.rows = 3;
+  ta.placeholder = 'Treść dodatkowego paragrafu...';
+  ta.style.cssText = 'flex:1;font-size:12px';
+  if (text) ta.value = text;
+  ta.addEventListener('input', () => renderAll());
+  const del = document.createElement('button');
+  del.textContent = '×';
+  del.style.cssText = 'padding:4px 9px;background:var(--red-bg);color:var(--red);border:1px solid #f5c6c6;border-radius:var(--radius);cursor:pointer;font-size:14px;line-height:1';
+  del.onclick = () => { row.remove(); updateAddParBtn(); renderAll(); };
+  row.appendChild(ta); row.appendChild(del);
+  wrap.appendChild(row);
+  updateAddParBtn();
+}
+
+function updateAddParBtn() {
+  const btn = document.getElementById('addExtraParBtn');
+  const n = document.getElementById('extraParsWrap').children.length;
+  btn.style.display = n >= 3 ? 'none' : 'block';
+}
+
+function getExtraPars() {
+  return Array.from(document.querySelectorAll('#extraParsWrap textarea'))
+    .map(t => t.value.trim()).filter(Boolean);
+}
+
+/* ─────────────── Parsowanie zakresu prac ─────────────── */
+
+function parseZakres(raw) {
+  const lines = (raw || '').split(/\r?\n/);
+  const blocks = [];
+  let cur = null;
+  const push = () => { if (cur && (cur.title || cur.items.length)) blocks.push(cur); };
+
+  /* Nagłówkiem sekcji jest linia, która:
+     - zaczyna się od # / ## / ###, albo
+     - kończy się dwukropkiem, albo
+     - jest krótka, nie kończy się przecinkiem/kropką i poprzedza listę punktów, albo
+     - jest krótka, nie kończy się przecinkiem/kropką i stoi na początku nowego bloku
+       (czyli po pustej linii) — np. „Sprzątanie" */
+  const isHeading = (line, next, startsBlock) => {
+    const s = line.trim();
+    if (/^#{1,3}\s+/.test(s)) return true;
+    if (/:$/.test(s)) return true;
+    const shortPlain = s.length <= 75 && !/[,;.]$/.test(s);
+    if (shortPlain && next && /[,;]$/.test(next.trim())) return true;
+    if (shortPlain && startsBlock && next) return true;
+    return false;
+  };
+
+  let startsBlock = true;
+  for (let i = 0; i < lines.length; i++) {
+    const raw1 = lines[i];
+    const s = raw1.trim();
+    if (!s) { push(); cur = null; startsBlock = true; continue; }
+    let next = '';
+    for (let j = i + 1; j < lines.length; j++) { if (lines[j].trim()) { next = lines[j]; break; } }
+    const atBlockStart = startsBlock;
+    startsBlock = false;
+    if (isHeading(s, next, atBlockStart)) {
+      push();
+      cur = { title: s.replace(/^#{1,3}\s+/, '').replace(/:$/, ''), items: [] };
+    } else {
+      if (!cur) cur = { title: '', items: [] };
+      cur.items.push(s.replace(/[,;]$/, ''));
+    }
+  }
+  push();
+  return blocks;
+}
+
+/* ─────────────── Render: umowa + załącznik ─────────────── */
+
+function getWyk() {
+  return {
+    name: g('wName'), addr: g('wAddr'),
+    pesel: g('wPesel'), dowod: g('wDowod'), nip: g('wNip')
+  };
+}
+
+function renderAll(scrollTop) {
+  const pane = document.getElementById('previewPane');
+  const w = getWyk();
+  const kwota = g('kwota');
+  const slownie = moneyToWords(kwota);
+
+  const kwEl = document.getElementById('kwotaSlownie');
+  if (kwEl) kwEl.textContent = slownie ? 'słownie: ' + slownie : '';
+
+  const th = document.getElementById('termHint');
+  if (th) {
+    const s = g('dStart'), e = g('dEnd');
+    if (s && e) {
+      const days = Math.round((new Date(e) - new Date(s)) / 86400000);
+      th.textContent = days >= 0 ? 'Czas na wykonanie: ' + days + ' dni' : 'Uwaga: zakończenie jest przed rozpoczęciem.';
+      th.style.color = days >= 0 ? 'var(--text3)' : 'var(--red)';
+    } else { th.textContent = ''; }
+  }
+
+  const dContract = fmtDate(g('dContract'));
+  const dStart = fmtDate(g('dStart'));
+  const dEnd = fmtDate(g('dEnd'));
+  const city = g('pCity'), street = g('pStreet'), area = g('pArea');
+  const rodzaj = g('rodzajPrac') === 'custom' ? g('rodzajCustom') : g('rodzajPrac');
+  const terminFV = g('terminFV') || '14';
+  const kara = g('kara') || '1';
+  const gwar = g('gwarancja') || '24';
+  const usterki = g('usterkiDni') || '3';
+  const gwarWyl = document.getElementById('gwarWyl').checked ? g('gwarWylText') : '';
+
+  const firmName = g('cfgFirmName') || 'KMBNO Sp. z o.o.';
+  const firmAddr = (g('cfgFirmAddr') || '').split(/\r?\n/).filter(Boolean);
+  const firmNip = g('cfgFirmNip') || '';
+
+  const zamawiajacy = '<div class="party">' +
+    '<div><strong>' + esc(firmName) + '</strong></div>' +
+    firmAddr.map(l => '<div>' + esc(l) + '</div>').join('') +
+    (firmNip ? '<div>NIP: ' + esc(firmNip) + ',</div>' : '') +
+    '<div>zwaną dalej <strong>Zamawiającym</strong>,</div></div>';
+
+  const wykBlock = state.wykType === 'osoba'
+    ? '<div class="party">' +
+      '<div><strong>' + (w.name ? esc(w.name) : blank('')) + '</strong></div>' +
+      '<div>' + (w.addr ? esc(w.addr) : blank('')) + '</div>' +
+      '<div>PESEL: ' + (w.pesel ? esc(w.pesel) : blank('')) + '</div>' +
+      '<div>Numer dowodu osobistego: ' + (w.dowod ? esc(w.dowod) : blank('')) + '</div>' +
+      '<div>zwanym dalej <strong>Wykonawcą</strong>,</div></div>'
+    : '<div class="party">' +
+      '<div><strong>' + (w.name ? esc(w.name) : blank('')) + '</strong></div>' +
+      '<div>' + (w.addr ? esc(w.addr) : blank('')) + '</div>' +
+      '<div>NIP: ' + (w.nip ? esc(w.nip) : blank('')) + '</div>' +
+      '<div>zwanym dalej <strong>Wykonawcą</strong>,</div></div>';
+
+  const lokal = [city ? esc(city) : '', street ? esc(street) : ''].filter(Boolean).join(', ');
+  const lokalTxt = lokal
+    ? 'w miejscowości ' + (city ? esc(city) : blank('')) + ', ' + (street ? esc(street) : blank(''))
+    : 'w miejscowości ' + blank('') + ', ' + blank('');
+
+  const kwotaTxt = kwota
+    ? '<strong>' + esc(fmtMoney(kwota)) + ' zł brutto</strong> (słownie: ' + esc(slownie) + ')'
+    : blank('') + ' zł brutto (słownie: ' + blank('') + ')';
+
+  /* Dodatkowe paragrafy wchodzą przed §8 z przenumerowaniem */
+  const extras = getExtraPars();
+  let pNum = 8;
+  const extrasHtml = extras.map(txt =>
+    '<div class="par"><div class="par-title">§ ' + (pNum++) + '</div><p>' + esc(txt) + '</p></div>'
+  ).join('');
+  const pFinal = pNum;
+
+  const umowa =
+'<div class="doc" id="umowaContent">' +
+  '<h3>Umowa o roboty budowlane</h3>' +
+  '<p class="sub">zawarta zdalnie w dniu ' + (dContract ? '<span class="blank f">' + esc(dContract) + '</span>' : blank('')) + ' roku pomiędzy:</p>' +
+  zamawiajacy +
+  '<p style="margin:10px 0">a</p>' +
+  wykBlock +
+
+  '<div class="par"><div class="par-title">§ 1</div><div class="par-sub">Przedmiot umowy</div><ol>' +
+    '<li>Zamawiający powierza Wykonawcy, a Wykonawca przyjmuje do wykonania roboty budowlane, których szczegółowy zakres określa Załącznik nr 1 do niniejszej umowy dotyczące ' +
+      (rodzaj ? esc(rodzaj) : blank('')) + ' o powierzchni ' + (area ? esc(area) : blank('')) + ' m² ' + lokalTxt +
+      '. Wykonawca oświadcza, że dysponuje odpowiednią wiedzą, doświadczeniem i kwalifikacjami oraz narzędziami niezbędnymi do należytego wykonania umowy i nie istnieją żadne przeszkody prawne i faktyczne uniemożliwiające lub utrudniające mu wykonywanie obowiązków wynikających z umowy.</li>' +
+    '<li>Wykonawca oświadcza, że zapoznał się z terenem prac jak i projektem i nie wnosi do nich żadnych zastrzeżeń.</li>' +
+    '<li>Wykonawca zobowiązuje się rozpocząć prace w terminie ' + (dStart ? esc(dStart) : blank('')) +
+      ' roku oraz wykonać roboty budowlane określone w § 1 ust. 1 do dnia ' + (dEnd ? esc(dEnd) : blank('')) + ' roku.</li>' +
+  '</ol></div>' +
+
+  '<div class="par"><div class="par-title">§ 2</div><div class="par-sub">Prawa i obowiązki Stron</div><ol>' +
+    '<li>Przy wykonywaniu obowiązków wynikających z niniejszej umowy, Wykonawca zobowiązany jest dołożyć najwyższej staranności, a powierzone obowiązki wykonywać zgodnie z przepisami prawa i postanowieniami łączącej strony umowy.</li>' +
+    '<li>Wykonawca zobowiązuje się terminowo wykonać przedmiot umowy zgodnie z wiedzą techniczną oraz stosownymi normami i przepisami prawa obowiązującymi w dniu odbioru.</li>' +
+    '<li>Wykonawca zobowiązuje się gruntownie posprzątać mieszkanie po zakończeniu robót objętych niniejszą umową.</li>' +
+    '<li>Zamawiający zobowiązany jest terminowo zrealizować płatność po odbiorze prac, zgodnie z warunkami niniejszej umowy.</li>' +
+  '</ol></div>' +
+
+  '<div class="par"><div class="par-title">§ 3</div><div class="par-sub">Odpowiedzialność Wykonawcy</div><ol>' +
+    '<li>Wykonawca ponosi wyłączną odpowiedzialność za wszelkie szkody spowodowane przez jego pracowników, wykonawców, kontrahentów i inne podmioty działające na rzecz Wykonawcy w związku z realizacją niniejszej umowy. Szkody te zostaną niezwłocznie naprawione przez samego Wykonawcę. Strony ustalają, że w przypadku niewykonania lub nienależytego wykonania przez Wykonawcę obowiązku naprawy powyższych szkód w terminie wyznaczonym przez Zamawiającego, Zamawiający będzie uprawniony do wykonania odpowiednich napraw na koszt i ryzyko Wykonawcy, w ramach wykonania zastępczego, bez konieczności uzyskiwania sądowego upoważnienia zgodnie z art. 480 Kodeksu cywilnego. Zamawiającemu w takim wypadku będzie przysługiwało uprawnienie do potrącenia kosztów naprawienia szkody z wierzytelnością z tytułu wynagrodzenia przysługującego Wykonawcy z tytułu wykonania niniejszej umowy.</li>' +
+    '<li>Wykonawca przejmuje wszelką odpowiedzialność za szkody poniesione przez osoby trzecie na terenie budowy i w jej obrębie w trakcie prowadzenia prac. Jeżeli pomimo tego osoba trzecia podniesie w stosunku do Zamawiającego roszczenie z tego tytułu, Wykonawca w terminie 7 dni od wezwania zwróci Zamawiającemu całkowitą wartość naprawionej przez Zamawiającego szkody oraz kosztów powstałych w związku z podjętą przez Zamawiającego obroną praw mu przysługujących (m.in. kosztów opłat sądowych, skarbowych itp.).</li>' +
+  '</ol></div>' +
+
+  '<div class="par"><div class="par-title">§ 4</div><div class="par-sub">Materiały i siła robocza</div><ol>' +
+    '<li>Wykonawca jest zobowiązany wykonać wszystkie roboty samodzielnie, przy pomocy swoich pracowników oraz przy użyciu swoich środków i narzędzi służących do wykonania niniejszej umowy. Ustanowienie podwykonawców nie jest dopuszczalne.</li>' +
+    '<li>Strony ustalają, że zakupu i dostawy koniecznych do prawidłowego wykonania przedmiotu umowy materiałów budowlanych dokona Wykonawca. Odbędzie się to w ustaleniu z Zamawiającym; organizacja i dostawa zakupów będzie po stronie Wykonawcy, natomiast płatność za nie po stronie Zamawiającego. Wykonawca jest zobowiązany dokumentować każdy zakup materiałów fakturą VAT wystawioną przez sprzedawcę materiału na Zamawiającego oraz przesłanie skanu lub zdjęcia danej faktury do Zamawiającego tego samego dnia. Wykonawca ma w obowiązku skompletowanie wszystkich faktur w oryginale dotyczących inwestycji, na koniec przesłanie ich za pośrednictwem paczkomatu InPost na koszt Zamawiającego.</li>' +
+    '<li>Wykonawca jest odpowiedzialny za odbiór i wniesienie wszelkich dostarczanych do mieszkania materiałów oraz zobowiązany do niezwłocznego sprawdzenia zgodności odbieranego towaru z zamówieniem, a także jego stanu. W przypadku odbioru przez Wykonawcę towaru niezgodnego z zamówieniem lub uszkodzonego, Wykonawca we własnym zakresie ponosi koszty związane z zakupem w jego miejsce towaru pełnowartościowego oraz zgodnego z zamówieniem.</li>' +
+    '<li>Wykonawca jest zobowiązany do zabezpieczenia dostarczanych do lokalu materiałów i środków potrzebnych do prawidłowego wykonania przedmiotu umowy i ponoszenia związanych z tym kosztów.</li>' +
+  '</ol></div>' +
+
+  '<div class="par"><div class="par-title">§ 5</div><div class="par-sub">Odbiór robót</div><ol>' +
+    '<li>W przypadku wystąpienia robót zanikających lub ulegających zakryciu, Wykonawca zobowiązany jest poinformować Zamawiającego o konieczności odbioru takich robót.</li>' +
+    '<li>W przypadku stwierdzenia przy odbiorze wad lub usterek nadających się do usunięcia, Zamawiający może dokonać odbioru i określić termin ich usunięcia lub odmówić odbioru do czasu usunięcia wad lub usterek.</li>' +
+    '<li>Jeżeli Wykonawca nie usunie w zakreślonym terminie wad lub usterek, Zamawiający będzie uprawniony do wykonania odpowiednich napraw wraz z kosztami lokalizacji wad na koszt i ryzyko Wykonawcy, w ramach wykonania zastępczego, bez konieczności uzyskiwania sądowego upoważnienia zgodnie z art. 480 Kodeksu cywilnego. Zamawiającemu będzie w takim wypadku przysługiwało uprawnienie do potrącenia kosztów usunięcia wad lub usterek z wierzytelnością z tytułu wynagrodzenia przysługującego Wykonawcy z tytułu wykonania niniejszej umowy.</li>' +
+  '</ol></div>' +
+
+  '<div class="par"><div class="par-title">§ 6</div><div class="par-sub">Wynagrodzenie</div><ol>' +
+    '<li>Za wykonanie przedmiotu umowy uważa się bezusterkowe wykonanie robót zgodnie z Załącznikiem nr 1 oraz w terminach określonych w § 1 ust. 3 niniejszej umowy.</li>' +
+    '<li>Wynagrodzenie za wykonanie robót budowlanych, będących przedmiotem niniejszej umowy, wynosi łącznie ' + kwotaTxt +
+      ', płatne przelewem bankowym na rachunek wskazany przez Wykonawcę na podstawie faktury z odroczonym ' + esc(terminFV) +
+      '-dniowym terminem płatności po odbiorze prac budowlanych przez przedstawiciela Zamawiającego.</li>' +
+    '<li>W przypadku przekroczenia terminów harmonogramu prac jak również za każdy dzień opóźnienia w wykonaniu obowiązku wynikającego z § 7 ust. 2, Wykonawca zapłaci Zamawiającemu karę umowną w wysokości ' + esc(kara) +
+      ' % wynagrodzenia brutto określonego w ust. 2 niniejszego paragrafu za każdy dzień opóźnienia. Powyższe nie wyłącza możliwości dochodzenia przez Zamawiającego odszkodowania, na zasadach ogólnych, ponad wysokość zastrzeżonej kary umownej.</li>' +
+    '<li>Zamawiający może potrącić karę umowną z wynagrodzenia przysługującego Wykonawcy z tytułu wykonania niniejszej umowy.</li>' +
+    '<li>Wynagrodzenie za prace dodatkowo zlecone do realizacji przez Zamawiającego będzie obliczone na podstawie odrębnego kosztorysu prac dodatkowych, po wyrażeniu uprzedniej pisemnej zgody Zamawiającego. Wykonawca nie może domagać się wynagrodzenia za prace dodatkowe wykonane bez uzyskania pisemnej zgody Zamawiającego.</li>' +
+  '</ol></div>' +
+
+  '<div class="par"><div class="par-title">§ 7</div><div class="par-sub">Gwarancja Wykonawcy</div><ol>' +
+    '<li>Niezależnie od rękojmi Wykonawca udziela Zamawiającemu ' + esc(gwar) + '-miesięcznej gwarancji jakości na wykonane roboty, licząc od dnia podpisania odbioru końcowego.' +
+      (gwarWyl ? ' ' + esc(gwarWyl) : '') + '</li>' +
+    '<li>W trakcie obowiązywania gwarancji Wykonawca zobowiązuje się niezwłocznie, nie później niż w terminie ' + esc(usterki) + ' dni usunąć wady lub usterki.</li>' +
+    '<li>Okres udzielonej gwarancji zostanie przedłużony o czas równy sumie wszelkich okresów usuwania przez Wykonawcę wad.</li>' +
+  '</ol></div>' +
+
+  extrasHtml +
+
+  '<div class="par"><div class="par-title">§ ' + pFinal + '</div><div class="par-sub">Postanowienia końcowe</div><ol>' +
+    '<li>Wszelkie zmiany niniejszej umowy będą dokonywane w formie pisemnej pod rygorem nieważności.</li>' +
+    '<li>Wszelkie uzgodnienia ustne, pisemne lub dokonane w innej formie przed podpisaniem umowy zostają w całości zastąpione niniejszą umową.</li>' +
+    '<li>Wszelkie spory mogące wyniknąć na tle niniejszej umowy Strony poddają pod rozstrzygnięcie Sądu właściwego miejscowo dla Zamawiającego.</li>' +
+    '<li>Załącznik nr 1 stanowi integralny składnik niniejszej umowy.</li>' +
+    '<li>Umowę sporządzono w dwóch jednobrzmiących egzemplarzach, po jednym dla każdej ze stron.</li>' +
+  '</ol></div>' +
+
+  '<div class="sig">' +
+    '<div><div class="line">ZAMAWIAJĄCY</div></div>' +
+    '<div><div class="line">WYKONAWCA</div></div>' +
+  '</div>' +
+'</div>';
+
+  /* ── Załącznik nr 1 ── */
+  const blocks = parseZakres(g('zakres'));
+  const zalTitle = g('zalTitle') || 'ZAKRES REMONTU';
+  const locLine = [city ? city.toUpperCase() : '', street].filter(Boolean).join(', ');
+
+  const zalBody = blocks.length
+    ? blocks.map(b =>
+        (b.title ? '<div class="zal-sec-title">' + esc(b.title) + '</div>' : '') +
+        (b.items.length ? '<ul>' + b.items.map(i => '<li>' + esc(i) + '</li>').join('') + '</ul>' : '')
+      ).join('')
+    : '<p style="color:var(--text3)">Zakres prac nie został jeszcze wpisany — wybierz inwestycję z Monday albo wpisz zakres ręcznie w panelu po lewej.</p>';
+
+  const zalacznik =
+'<div class="doc" id="zalacznikContent">' +
+  '<div class="zal-head">Załącznik nr 1 do umowy o roboty budowlane' + (dContract ? ' z dnia ' + esc(dContract) + ' roku' : '') + '</div>' +
+  '<h3>' + esc(zalTitle) + '</h3>' +
+  '<div class="zal-meta" style="margin-top:18px">' +
+    '<div><strong>Lokalizacja:</strong> ' + (locLine ? esc(locLine) : blank('')) + '</div>' +
+    '<div><strong>Powierzchnia:</strong> ' + (area ? esc(area) + ' m²' : blank('')) + '</div>' +
+  '</div>' +
+  zalBody +
+  '<div class="sig">' +
+    '<div><div class="line">ZAMAWIAJĄCY</div></div>' +
+    '<div><div class="line">WYKONAWCA</div></div>' +
+  '</div>' +
+'</div>';
+
+  pane.innerHTML =
+    '<div class="doc-actions">' +
+      '<button class="btn btn-secondary" style="flex:0 0 auto;padding:8px 16px;white-space:nowrap" onclick="copyDoc()">Kopiuj tekst</button>' +
+      '<button class="btn btn-secondary" style="flex:0 0 auto;padding:8px 16px;white-space:nowrap" id="btnEdit" onclick="toggleEdit()">✏️ Edytuj</button>' +
+      '<button class="btn btn-primary" style="flex:0 0 auto;padding:8px 16px;white-space:nowrap" onclick="downloadHTML()">PDF / Druk</button>' +
+    '</div>' +
+    '<div class="doc-wrap" id="umowaWrap">' + umowa + '</div>' +
+    '<div class="doc-wrap" id="zalacznikWrap">' + zalacznik + '</div>';
+
+  if (scrollTop) pane.scrollTop = 0;
+}
+
+function toggleEdit() {
+  const btn = document.getElementById('btnEdit');
+  const a = document.getElementById('umowaContent');
+  const b = document.getElementById('zalacznikContent');
+  if (!a || !btn) return;
+  const editing = a.contentEditable === 'true';
+  [a, b].forEach(el => {
+    if (!el) return;
+    el.contentEditable = editing ? 'false' : 'true';
+    el.style.outline = editing ? '' : '2px solid var(--accent)';
+    el.style.outlineOffset = editing ? '' : '4px';
+  });
+  if (editing) {
+    btn.textContent = '✏️ Edytuj';
+    btn.style.background = ''; btn.style.color = '';
+  } else {
+    a.focus();
+    btn.textContent = '✅ Zakończ edycję';
+    btn.style.background = 'var(--green-bg)'; btn.style.color = 'var(--green)';
+  }
+}
+
+function copyDoc() {
+  const a = document.getElementById('umowaContent');
+  const b = document.getElementById('zalacznikContent');
+  const txt = [a ? a.innerText : '', b ? b.innerText : ''].filter(Boolean).join('\n\n\n');
+  navigator.clipboard.writeText(txt).then(() => {
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = 'Skopiowano!';
+    setTimeout(() => btn.textContent = orig, 1800);
+  });
+}
+
+/* ─────────────── Eksport do druku / PDF ─────────────── */
+
+function downloadHTML() {
+  const a = document.getElementById('umowaContent');
+  if (!a) { renderAll(true); }
+  const umowaEl = document.getElementById('umowaContent');
+  const zalEl = document.getElementById('zalacznikContent');
+  if (!umowaEl) { alert('Najpierw wygeneruj umowę.'); return; }
+
+  saveToHistory(true);
+
+  const w = getWyk();
+  const nameSlug = (w.name || 'wykonawca').replace(/\s+/g, '_').replace(/[^\wąćęłńóśżźĄĆĘŁŃÓŚŻŹ_-]/g, '');
+  const citySlug = (g('pCity') || '').replace(/\s+/g, '_');
+  const fname = ['Umowa', nameSlug, citySlug].filter(Boolean).join('_');
+
+  const html = '<!DOCTYPE html>\n<html lang="pl">\n<head>\n<meta charset="UTF-8">\n<title>' + esc(fname) + '</title>\n<style>\n' +
+'  *{margin:0;padding:0;box-sizing:border-box}\n' +
+'  body{font-family:"Times New Roman",Times,serif;font-size:11pt;line-height:1.55;color:#000;background:#fff}\n' +
+'  .strona{max-width:21cm;margin:0 auto;padding:2cm 1.8cm}\n' +
+'  h3{text-align:center;font-weight:bold;font-size:12.5pt;margin-bottom:0.5em;text-transform:uppercase;letter-spacing:0.03em}\n' +
+'  .sub{text-align:center;margin-bottom:1.2em;font-size:10.5pt}\n' +
+'  .party{margin-bottom:0.9em}\n' +
+'  .party div{line-height:1.45}\n' +
+'  .par{margin-bottom:0.9em;page-break-inside:avoid;break-inside:avoid}\n' +
+'  .par-title{text-align:center;font-weight:bold;font-size:11pt;margin-bottom:0.15em;page-break-after:avoid;break-after:avoid}\n' +
+'  .par-sub{text-align:center;font-weight:bold;font-size:11pt;margin-bottom:0.4em;page-break-after:avoid;break-after:avoid}\n' +
+'  p{text-align:justify;margin-bottom:0.3em}\n' +
+'  ol,ul{padding-left:1.4em;margin:0.3em 0;orphans:2;widows:2}\n' +
+'  li{text-align:justify;margin-bottom:0.3em}\n' +
+'  .blank{display:inline-block;border-bottom:1px solid #555;min-width:120px}\n' +
+'  .blank.f{border-bottom:none;min-width:0;display:inline}\n' +
+'  .sig{width:100%;margin-top:3em;display:flex;justify-content:space-between}\n' +
+'  .sig>div{width:44%;text-align:center}\n' +
+'  .sig .line{border-top:1px solid #000;padding-top:0.3em;margin-top:2.5em;font-size:9.5pt}\n' +
+'  .zal-head{text-align:right;font-size:10pt;margin-bottom:1.2em}\n' +
+'  .zal-meta{margin-bottom:1em}\n' +
+'  .zal-meta div{margin-bottom:0.2em}\n' +
+'  .zal-sec-title{font-weight:bold;margin:0.9em 0 0.3em;page-break-after:avoid;break-after:avoid}\n' +
+'  .zalacznik{page-break-before:always;break-before:page}\n' +
+'  .druk-btn{text-align:center;margin-bottom:1cm;display:flex;gap:10px;justify-content:center}\n' +
+'  button{padding:9px 22px;font-size:13px;background:#1a1916;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:sans-serif}\n' +
+'  @media print{.druk-btn{display:none!important}.strona{padding:0}@page{margin:2cm 1.8cm;size:A4}}\n' +
+'</style>\n</head>\n<body>\n<div class="strona">\n' +
+'<div class="druk-btn"><button onclick="window.print()">Zapisz jako PDF / Drukuj</button></div>\n' +
+umowaEl.innerHTML + '\n' +
+'<div class="zalacznik">' + (zalEl ? zalEl.innerHTML : '') + '</div>\n' +
+'</div>\n</body>\n</html>';
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fname + '.html';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/* ─────────────── Historia (Supabase) ─────────────── */
+
+function getSnapshot() {
+  return {
+    wykType: state.wykType,
+    wyk: getWyk(),
+    inv: state.inv ? { id: state.inv.id, name: state.inv.name } : null,
+    pCity: g('pCity'), pStreet: g('pStreet'), pArea: g('pArea'),
+    rodzajPrac: g('rodzajPrac'), rodzajCustom: g('rodzajCustom'),
+    dContract: g('dContract'), dStart: g('dStart'), dEnd: g('dEnd'),
+    kwota: g('kwota'), terminFV: g('terminFV'), kara: g('kara'),
+    gwarancja: g('gwarancja'), usterkiDni: g('usterkiDni'),
+    gwarWyl: document.getElementById('gwarWyl').checked, gwarWylText: g('gwarWylText'),
+    zalTitle: g('zalTitle'), zakres: g('zakres'),
+    extraPars: getExtraPars()
+  };
+}
+
+function snapLabel(s) {
+  const who = (s.wyk && s.wyk.name) ? s.wyk.name : 'bez wykonawcy';
+  const where = [s.pCity, s.pStreet].filter(Boolean).join(', ') || 'bez adresu';
+  return who + ' — ' + where;
+}
+
+async function saveToHistory(silent) {
+  if (!sb || !currentUser) { if (!silent) alert('Musisz być zalogowany, aby zapisać umowę.'); return; }
+  const snap = getSnapshot();
+  const base = snapLabel(snap);
+  try {
+    const { data: all, error: errAll } = await sb.from(TABLE_UMOWY).select('etykieta');
+    if (errAll) throw errAll;
+    let max = 0;
+    (all || []).forEach(r => {
+      const e = (r.etykieta || '').trim();
+      if (e === base) max = Math.max(max, 1);
+      const m = e.match(/^(.*) \((\d+)\)$/);
+      if (m && m[1] === base) max = Math.max(max, parseInt(m[2], 10));
+    });
+    const label = max === 0 ? base : base + ' (' + (max + 1) + ')';
+    snap.label = label;
+    const { error } = await sb.from(TABLE_UMOWY).insert({
+      autor: userLabel(currentUser.email), etykieta: label, dane: snap
+    });
+    if (error) throw error;
+    await renderHistory();
+  } catch(e) {
+    console.error('saveToHistory:', e);
+    if (!silent) alert('Nie udało się zapisać umowy:\n' + (e.message || e) +
+      '\n\nSprawdź, czy tabela „' + TABLE_UMOWY + '" istnieje w Supabase (patrz README).');
+  }
+}
+
+async function renderHistory() {
+  const list = document.getElementById('historyList');
+  if (!list) return;
+  if (!sb || !currentUser) { list.innerHTML = '<div style="font-size:11px;color:var(--text3)">Zaloguj się, aby zobaczyć historię.</div>'; return; }
+  list.innerHTML = '<div style="font-size:11px;color:var(--text3)">Wczytywanie...</div>';
+  try {
+    const { data, error } = await sb.from(TABLE_UMOWY)
+      .select('id, utworzono, autor, etykieta, dane')
+      .order('utworzono', { ascending: false }).limit(100);
+    if (error) throw error;
+    historyCache = data || [];
+    if (!historyCache.length) {
+      list.innerHTML = '<div style="font-size:11px;color:var(--text3)">Brak zapisanych umów.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    historyCache.forEach((row, i) => {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'margin-bottom:5px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius)';
+      const title = document.createElement('div');
+      title.style.cssText = 'font-size:11px;color:var(--text2);line-height:1.35;cursor:pointer;margin-bottom:4px';
+      title.textContent = row.etykieta || 'Umowa';
+      title.addEventListener('click', () => loadFromHistory(i));
+      const meta = document.createElement('div');
+      meta.style.cssText = 'font-size:10px;color:var(--text3);display:flex;justify-content:space-between;align-items:center;gap:6px';
+      const mine = row.autor === userLabel(currentUser.email);
+      const author = document.createElement('span');
+      const dt = row.utworzono ? new Date(row.utworzono) : null;
+      const dstr = dt ? String(dt.getDate()).padStart(2,'0') + '.' + String(dt.getMonth()+1).padStart(2,'0') + '.' + dt.getFullYear() + ' ' + String(dt.getHours()).padStart(2,'0') + ':' + String(dt.getMinutes()).padStart(2,'0') : '';
+      author.textContent = (mine ? 'Ty' : row.autor) + (dstr ? ' · ' + dstr : '');
+      if (mine) author.style.fontWeight = '600';
+      const btns = document.createElement('span');
+      btns.style.cssText = 'display:flex;gap:4px';
+      const loadBtn = document.createElement('button');
+      loadBtn.style.cssText = 'padding:2px 8px;font-size:10px;background:var(--accent-bg);color:var(--accent-text);border:none;border-radius:var(--radius);cursor:pointer';
+      loadBtn.textContent = 'Wczytaj';
+      loadBtn.addEventListener('click', () => {
+        loadFromHistory(i);
+        loadBtn.textContent = '✓';
+        setTimeout(() => loadBtn.textContent = 'Wczytaj', 1500);
+      });
+      const delBtn = document.createElement('button');
+      delBtn.style.cssText = 'padding:2px 8px;font-size:10px;background:var(--red-bg);color:var(--red);border:1px solid #f5c6c6;border-radius:var(--radius);cursor:pointer';
+      delBtn.textContent = 'Usuń';
+      delBtn.addEventListener('click', () => {
+        if (confirm('Usunąć z historii?\n\n' + (row.etykieta || '') + (mine ? '' : '\n\nAutor: ' + row.autor))) deleteFromHistory(row.id);
+      });
+      btns.appendChild(loadBtn); btns.appendChild(delBtn);
+      meta.appendChild(author); meta.appendChild(btns);
+      wrap.appendChild(title); wrap.appendChild(meta);
+      list.appendChild(wrap);
+    });
+  } catch(e) {
+    list.innerHTML = '<div style="font-size:11px;color:var(--red)">Nie udało się wczytać historii: ' + esc(e.message || e) + '</div>';
+  }
+}
+
+async function deleteFromHistory(id) {
+  try {
+    const { error } = await sb.from(TABLE_UMOWY).delete().eq('id', id);
+    if (error) throw error;
+    await renderHistory();
+  } catch(e) { alert('Nie udało się usunąć: ' + (e.message || e)); }
+}
+
+function loadFromHistory(i) {
+  const row = historyCache[i];
+  if (!row || !row.dane) return;
+  const s = row.dane;
+
+  state.wykType = s.wykType || 'osoba';
+  document.querySelectorAll('#wykTypeGroup .pill').forEach(p => {
+    p.classList.toggle('active', p.dataset.val === state.wykType);
+  });
+  document.getElementById('wykOsobaFields').style.display = state.wykType === 'osoba' ? 'block' : 'none';
+  document.getElementById('wykFirmaFields').style.display = state.wykType === 'firma' ? 'block' : 'none';
+
+  const w = s.wyk || {};
+  setVal('wName', w.name); setVal('wAddr', w.addr);
+  setVal('wPesel', w.pesel); setVal('wDowod', w.dowod); setVal('wNip', w.nip);
+  document.getElementById('wykManual').style.display = 'block';
+  setVal('wykSearch', w.name || '');
+
+  setVal('pCity', s.pCity); setVal('pStreet', s.pStreet); setVal('pArea', s.pArea);
+  setVal('rodzajPrac', s.rodzajPrac || 'wykończenia mieszkania');
+  setVal('rodzajCustom', s.rodzajCustom);
+  toggleRodzaj();
+  setVal('dContract', s.dContract); setVal('dStart', s.dStart); setVal('dEnd', s.dEnd);
+  setVal('kwota', s.kwota); setVal('terminFV', s.terminFV); setVal('kara', s.kara);
+  setVal('gwarancja', s.gwarancja); setVal('usterkiDni', s.usterkiDni);
+  document.getElementById('gwarWyl').checked = s.gwarWyl !== false;
+  setVal('gwarWylText', s.gwarWylText);
+  toggleGwarWyl();
+  setVal('zalTitle', s.zalTitle || 'ZAKRES REMONTU');
+  setVal('zakres', s.zakres);
+
+  document.getElementById('extraParsWrap').innerHTML = '';
+  (s.extraPars || []).forEach(t => addExtraPar(t));
+  updateAddParBtn();
+
+  state.inv = s.inv || null;
+  if (s.inv) { setVal('invSearch', s.inv.name || ''); }
+
+  renderAll(true);
+}
+
+/* ─────────────── Widoki ─────────────── */
+
+function switchView(view) {
+  const app = document.getElementById('appPane');
+  const cfg = document.getElementById('cfgPane');
+  const bg = document.getElementById('navGenerator');
+  const bc = document.getElementById('navConfig');
+  if (view === 'config') {
+    app.style.display = 'none';
+    cfg.style.display = 'block';
+    bg.classList.remove('active'); bc.classList.add('active');
+  } else {
+    app.style.display = 'flex';
+    cfg.style.display = 'none';
+    bg.classList.add('active'); bc.classList.remove('active');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', initAuth);
+</script>
+</body>
+</html>
