@@ -734,7 +734,7 @@ async function saveConfig(shared) {
   const bi = document.getElementById('cfgBoardInv');
   if (bw && bw.value) CFG.boardWyk = bw.value;
   if (bi && bi.value) CFG.boardInv = bi.value;
-  ['addr','pesel','dowod','nip'].forEach(k => {
+  ['addr','pesel','dowod','nip','notatki'].forEach(k => {
     const el = document.getElementById('mapWyk_' + k);
     if (el && el.value) CFG.mapWyk[k] = el.value;
   });
@@ -879,10 +879,13 @@ async function mondayItems(boardId, colIds) {
 
 /* Automatyczne dopasowanie kolumn po nazwie */
 const PATTERNS = {
-  addr:   [/adres.*zamieszk/i, /^adres/i, /zamieszkan/i, /ulica/i],
+  addr:   [/adres.*zamieszk/i, /^adres/i, /zamieszkan/i, /ulica/i, /lokalizacja/i],
   pesel:  [/pesel/i],
   dowod:  [/dow[oó]d/i, /seria.*numer/i, /nr.*dowodu/i],
   nip:    [/^nip/i, /nip/i],
+  /* Na tablicy „👷‍♂️ Wykonawcy" nie ma osobnych kolumn na PESEL i dowód —
+     te dane bywają wpisane tekstem w „Dodatkowych informacjach". */
+  notatki: [/dodatkowe informacje/i, /uwagi/i, /notatk/i, /opis/i],
   zakres: [/zakres.*remont/i, /zakres.*prac/i, /zakres/i, /prace/i],
   /* „Powierzchnia użytkowa" ma pierwszeństwo — tablica może mieć też
      zwykłą „Powierzchnię" (np. działki), a do umowy wchodzi użytkowa. */
@@ -909,7 +912,7 @@ function autoMap(cols, keys) {
    których w tablicy już nie ma) — dopasuj je automatycznie po nazwach. */
 async function ensureMapping(which) {
   const boardId = which === 'wyk' ? CFG.boardWyk : CFG.boardInv;
-  const keys = which === 'wyk' ? ['addr','pesel','dowod','nip'] : ['zakres','area','city','street'];
+  const keys = which === 'wyk' ? ['addr','pesel','dowod','nip','notatki'] : ['zakres','area','city','street'];
   const map = which === 'wyk' ? CFG.mapWyk : CFG.mapInv;
   if (!boardId) return map;
   const cols = await mondayColumns(boardId);
@@ -926,11 +929,12 @@ async function ensureMapping(which) {
 
 const MAP_LABELS = {
   addr: 'Adres', pesel: 'PESEL', dowod: 'Nr dowodu', nip: 'NIP',
+  notatki: 'Notatki (skąd doczytać PESEL/dowód)',
   zakres: 'Zakres prac', area: 'Powierzchnia', city: 'Miejscowość', street: 'Ulica / lokalizacja'
 };
 
 function renderMapUI(which, cols, map) {
-  const keys = which === 'wyk' ? ['addr','pesel','dowod','nip'] : ['zakres','area','city','street'];
+  const keys = which === 'wyk' ? ['addr','pesel','dowod','nip','notatki'] : ['zakres','area','city','street'];
   const wrap = document.getElementById(which === 'wyk' ? 'mapWykWrap' : 'mapInvWrap');
   if (!wrap) return;
   const opts = c => '<option value="">— brak —</option>' + cols.map(col =>
@@ -949,7 +953,7 @@ async function onBoardChange(which) {
   wrap.innerHTML = '<div class="loading-badge">Pobieranie kolumn...</div>';
   try {
     const cols = await mondayColumns(boardId);
-    const keys = which === 'wyk' ? ['addr','pesel','dowod','nip'] : ['zakres','area','city','street'];
+    const keys = which === 'wyk' ? ['addr','pesel','dowod','nip','notatki'] : ['zakres','area','city','street'];
     const existing = which === 'wyk' ? CFG.mapWyk : CFG.mapInv;
     const known = cols.map(c => c.id);
     const hasExisting = keys.some(k => existing[k] && known.indexOf(existing[k]) > -1);
@@ -1024,19 +1028,47 @@ async function loadWykonawcy(force) {
   hint.textContent = 'Pobieranie wykonawców z Monday...';
   try {
     const m = await ensureMapping('wyk');
-    const items = await mondayItems(CFG.boardWyk, [m.addr, m.pesel, m.dowod, m.nip]);
-    wykonawcy = items.map(it => ({
-      id: it.id,
-      name: it.name,
-      addr: it.cv[m.addr] || '',
-      pesel: it.cv[m.pesel] || '',
-      dowod: it.cv[m.dowod] || '',
-      nip: it.cv[m.nip] || ''
-    })).sort((a,b) => a.name.localeCompare(b.name, 'pl'));
+    const items = await mondayItems(CFG.boardWyk, [m.addr, m.pesel, m.dowod, m.nip, m.notatki]);
+    wykonawcy = items.map(it => {
+      const rec = {
+        id: it.id,
+        name: it.name,
+        addr: it.cv[m.addr] || '',
+        pesel: it.cv[m.pesel] || '',
+        dowod: it.cv[m.dowod] || '',
+        nip: it.cv[m.nip] || ''
+      };
+      return uzupelnijZNotatki(rec, it.cv[m.notatki] || '');
+    }).sort((a,b) => a.name.localeCompare(b.name, 'pl'));
     hint.textContent = wykonawcy.length + ' wykonawców z Monday';
   } catch(e) {
     hint.innerHTML = '<span style="color:var(--red)">Nie udało się pobrać wykonawców: ' + esc(e.message || e) + '</span><br>Dane możesz wpisać ręcznie poniżej.';
   }
+}
+
+/* Doczytanie PESEL-u, numeru dowodu i adresu z pola tekstowego.
+   Na tablicy „👷‍♂️ Wykonawcy" bywają wpisane w „Dodatkowych informacjach"
+   w postaci: „PESEL: 89110304325, Numer dowodu osobistego: CGS943059". */
+function uzupelnijZNotatki(rec, notatka) {
+  if (!notatka) return rec;
+  if (!rec.pesel) {
+    const m = notatka.match(/pesel\D{0,6}(\d{11})/i);
+    if (m) rec.pesel = m[1];
+  }
+  if (!rec.dowod) {
+    // Wielkie litery w serii dowodu rozpoznajemy dosłownie, żeby nie uciąć
+    // pierwszego znaku (np. „dowód CEI929880" → CEI929880, nie EI929880)
+    const m = notatka.match(/[Dd]ow[oó]d[^\n]{0,40}?\b([A-Z]{2,3}\s?\d{5,6})\b/)
+           || notatka.match(/\b([A-Z]{3}\s?\d{6})\b/);
+    if (m) rec.dowod = m[1].replace(/\s+/g, ' ').trim();
+  }
+  if (!rec.addr) {
+    // Tekst po „Adres:" aż do PESEL-u, dowodu albo końca linii.
+    // Kropka nie kończy dopasowania, bo w adresach jest „ul.".
+    const m = notatka.match(/[Aa]dres\s*:?\s*(.+?)(?=\s*(?:PESEL|pesel|[Nn]r\s*dow|[Nn]umer\s*dow|[Dd]ow[oó]d)\b|\n|$)/);
+    if (m) rec.addr = m[1].replace(/[.,;]\s*$/, '').trim();
+  }
+  return rec;
 }
 
 function searchWyk(val) {
