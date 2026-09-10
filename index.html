@@ -707,6 +707,11 @@ async function loadConfig() {
     CFG.mapWyk = Object.assign({ addr:'', pesel:'', dowod:'', nip:'' }, cfg.mapWyk || {});
     CFG.mapInv = Object.assign({ zakres:'', area:'', city:'', street:'' }, cfg.mapInv || {});
   }
+  /* Samonaprawa: gdyby w zapisanej konfiguracji tablice były puste
+     (np. ktoś zapisał ustawienia przed „Sprawdź połączenie"),
+     wracamy do domyślnych, zamiast zostawiać generator bez danych. */
+  if (!CFG.boardWyk) CFG.boardWyk = DEFAULT_BOARD_WYK;
+  if (!CFG.boardInv) CFG.boardInv = DEFAULT_BOARD_INV;
   const p = document.getElementById('cfgProxy');
   if (p) p.value = CFG.proxyUrl || '';
   const du = document.getElementById('cfgDriveUrl');
@@ -721,15 +726,21 @@ async function saveConfig(shared) {
   const dkEl = document.getElementById('cfgDriveKey');
   if (duEl) CFG.driveUrl = (duEl.value || '').trim();
   if (dkEl) CFG.driveKey = (dkEl.value || '').trim();
-  CFG.boardWyk = document.getElementById('cfgBoardWyk').value || '';
-  CFG.boardInv = document.getElementById('cfgBoardInv').value || '';
+  /* Zapisujemy tylko to, co użytkownik faktycznie wybrał. Puste pole
+     (bo lista nie została jeszcze wczytana) NIE kasuje działającego
+     ustawienia — inaczej jedno kliknięcie „Zapisz" potrafi wyzerować
+     konfigurację całemu zespołowi. */
+  const bw = document.getElementById('cfgBoardWyk');
+  const bi = document.getElementById('cfgBoardInv');
+  if (bw && bw.value) CFG.boardWyk = bw.value;
+  if (bi && bi.value) CFG.boardInv = bi.value;
   ['addr','pesel','dowod','nip'].forEach(k => {
     const el = document.getElementById('mapWyk_' + k);
-    if (el) CFG.mapWyk[k] = el.value || '';
+    if (el && el.value) CFG.mapWyk[k] = el.value;
   });
   ['zakres','area','city','street'].forEach(k => {
     const el = document.getElementById('mapInv_' + k);
-    if (el) CFG.mapInv[k] = el.value || '';
+    if (el && el.value) CFG.mapInv[k] = el.value;
   });
 
   const out = document.getElementById('cfgSaveResult');
@@ -903,10 +914,13 @@ async function ensureMapping(which) {
   if (!boardId) return map;
   const cols = await mondayColumns(boardId);
   const known = cols.map(c => c.id);
-  const valid = keys.some(k => map[k] && known.indexOf(map[k]) > -1);
-  if (valid) return map;
   const auto = autoMap(cols, keys);
-  keys.forEach(k => { map[k] = auto[k]; });
+  /* Ręczny wybór szanujemy, ale każdą lukę (albo wskazanie na kolumnę,
+     której już nie ma) uzupełniamy automatycznie. Wcześniej wystarczyło
+     jedno poprawne mapowanie, żeby reszta pól została pusta. */
+  keys.forEach(k => {
+    if (!map[k] || known.indexOf(map[k]) === -1) map[k] = auto[k];
+  });
   return map;
 }
 
@@ -1545,7 +1559,9 @@ function parseZakres(raw) {
       cur = { title: s.replace(/^#{1,3}\s+/, '').replace(/:$/, ''), items: [] };
     } else {
       if (!cur) cur = { title: '', items: [] };
-      cur.items.push(s.replace(/[,;]$/, ''));
+      // Zdejmujemy znaki wypunktowania ze źródła (*, -, •), bo listę
+      // rysuje już sam załącznik — inaczej wychodzi „• * treść".
+      cur.items.push(s.replace(/^[*•·▪‣\-–—]+\s*/, '').replace(/[,;]$/, ''));
     }
   }
   push();
