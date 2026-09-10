@@ -123,6 +123,29 @@ function odpowiedz(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+/** ★ URUCHOM TO RAZ, PRZED WDROŻENIEM ★
+ *  Losuje sekret, zapisuje go we właściwościach skryptu i wypisuje w dzienniku.
+ *  Skopiuj wypisaną wartość i wklej ją w generatorze:
+ *  ⚙ Konfiguracja → „Zakres prac z Dysku Google" → pole „Tajny klucz".
+ *  Nie musisz niczego wymyślać ani wpisywać ręcznie w ustawieniach projektu. */
+function ustawSekret() {
+  var znaki = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  var sekret = '';
+  for (var i = 0; i < 40; i++) {
+    sekret += znaki.charAt(Math.floor(Math.random() * znaki.length));
+  }
+  PropertiesService.getScriptProperties().setProperty('SEKRET', sekret);
+  Logger.log('Twój tajny klucz (skopiuj go do generatora):\n\n%s\n', sekret);
+  return sekret;
+}
+
+/** Podgląd już ustawionego sekretu, gdybyś go zgubił. */
+function pokazSekret() {
+  var s = PropertiesService.getScriptProperties().getProperty('SEKRET');
+  Logger.log(s ? ('Zapisany klucz:\n\n' + s + '\n') : 'Sekret nie jest jeszcze ustawiony — uruchom ustawSekret().');
+  return s;
+}
+
 /** Do ręcznego sprawdzenia w edytorze: wstaw identyfikator folderu i uruchom.
  *  Wynik zobaczysz w widoku „Dziennik wykonania". */
 function test_odczytu() {
