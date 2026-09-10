@@ -525,6 +525,11 @@ textarea { resize: vertical; line-height: 1.5; }
       W Monday jest tylko link do folderu z zakresem — treść leży na Dysku. Mały skrypt w Waszym Google
       podaje ją generatorowi, dzięki czemu Załącznik nr 1 wypełnia się sam po wybraniu inwestycji.
       Kod skryptu i instrukcja wdrożenia: plik <code>google-apps-script/Kod.gs</code> w repozytorium.
+      <br><br>
+      Plik z zakresem może nazywać się dowolnie — skrypt bierze dokument leżący w folderze
+      (dokument Google, potem <code>.docx</code>, potem <code>.txt</code>; przy kilku — ostatnio
+      modyfikowany). Wymaga natomiast, żeby <strong>nazwa folderu zawierała „zakres"</strong> —
+      to jedyne, co pilnuje, żeby przez ten adres nie dało się wyciągnąć innych plików z Dysku.
     </div>
     <div class="field">
       <label>Adres skryptu (kończy się na /exec)</label>
@@ -1391,7 +1396,11 @@ async function wczytajZakresZDysku(cicho) {
     } else {
       throw new Error('Skrypt nie zwrócił treści');
     }
-    zakresHint('✓ Wczytano z Dysku („' + (j.nazwa || 'dokument') + '"): ' + st.sekcji + ' sekcji, ' + st.punktow + ' punktów.', 'var(--green)');
+    const wiecej = (j.pominieto > 0)
+      ? ' W folderze były jeszcze ' + j.pominieto + ' inne dokumenty — jeśli to nie ten, sprawdź folder na Dysku.'
+      : '';
+    zakresHint('✓ Wczytano z Dysku („' + (j.nazwa || 'dokument') + '"): ' + st.sekcji + ' sekcji, ' + st.punktow + ' punktów.' + wiecej,
+      j.pominieto > 0 ? 'var(--warn-text)' : 'var(--green)');
     return true;
   } catch (e) {
     zakresHint('Nie udało się pobrać z Dysku: ' + (e.message || e), 'var(--red)');
