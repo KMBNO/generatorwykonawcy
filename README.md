@@ -94,8 +94,15 @@ a nie samą treść — dokument z zakresem leży w tym folderze. Są trzy drogi
 2. **📂 Otwórz na Dysku** — otwiera folder tej inwestycji w nowej karcie.
 3. **⬆ Z pliku Word** — wczytanie pobranego `.docx`; generator rozpakowuje go w przeglądarce.
 
-Skrypt zwraca wyłącznie pliki, których nazwa zaczyna się od „zakres", i wymaga tajnego klucza —
-ten klucz trzymany jest w Supabase, nie w kodzie.
+**Nazwa pliku nie ma znaczenia** — dokument w folderze może nazywać się choćby „Dokument bez
+tytułu". Skrypt bierze pierwszy czytelny dokument z folderu: najpierw dokument Google, potem
+`.docx`, potem `.txt`, a gdy jest ich kilka — ostatnio modyfikowany (generator wtedy uprzedza, że
+w folderze leżało więcej dokumentów).
+
+Skrypt wymaga tajnego klucza — trzymanego w Supabase, nie w kodzie — i czyta wyłącznie z folderów,
+**których nazwa zawiera „zakres"** (u nas: „Zakres Remontu"). To zastępuje wcześniejszy warunek na
+nazwę pliku: nawet znając adres i klucz, nie da się tym skryptem wyciągnąć dowolnego dokumentu
+z Dysku.
 
 **Uwaga o kolumnach lustrzanych:** większość kolumn na tej tablicy to `mirror` (lustra z tablicy
 Nieruchomości). Przez API zwracają one puste pole `text`, a wartość podają w `display_value` —
