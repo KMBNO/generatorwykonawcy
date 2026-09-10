@@ -40,16 +40,19 @@
  *  „Kto ma dostęp: Wszyscy" oznacza, że adres jest osiągalny bez logowania —
  *  dlatego każde wywołanie musi podać SEKRET, którego nie ma w kodzie
  *  generatora (leży w bazie Supabase, widocznej tylko dla zalogowanych).
- *  Dodatkowo skrypt zwraca WYŁĄCZNIE pliki, których nazwa zaczyna się
- *  od „zakres" — nawet znając adres i sekret, nie da się nim wyciągnąć
- *  dowolnego dokumentu z Dysku.
+ *  Dodatkowo skrypt czyta WYŁĄCZNIE z folderów, których nazwa zawiera
+ *  „zakres" (u nas: „Zakres Remontu") — nawet znając adres i sekret, nie da
+ *  się nim wyciągnąć dowolnego dokumentu z Dysku. Plik w środku może
+ *  nazywać się dowolnie, bo nazw nikt nie pilnuje.
  *
  *  Jeśli sekret kiedykolwiek wycieknie: zmień wartość SEKRET w ustawieniach
  *  projektu i wklej nową w Konfiguracji generatora. Nic więcej nie trzeba.
  * ══════════════════════════════════════════════════════════════════ */
 
-/** Zwracamy tylko pliki o nazwie zaczynającej się od tego przedrostka. */
-var PRZEDROSTEK = 'zakres';
+/** Czytamy tylko z folderów, których nazwa zawiera ten fragment.
+ *  To jedyne zabezpieczenie „co wolno przeczytać" poza sekretem —
+ *  nazwa PLIKU nie ma znaczenia. */
+var FOLDER_MUSI_ZAWIERAC = 'zakres';
 
 function doGet(e) {
   try {
@@ -75,27 +78,41 @@ function doGet(e) {
       return odpowiedz({ error: 'Nie mam dostępu do tego folderu albo on nie istnieje.' });
     }
 
-    var plik = znajdzPlikZakresu(folder);
-    if (!plik) {
+    if (folder.getName().toLowerCase().indexOf(FOLDER_MUSI_ZAWIERAC) === -1) {
       return odpowiedz({
-        error: 'W folderze „' + folder.getName() + '" nie ma pliku o nazwie zaczynającej się od „' + PRZEDROSTEK + '".'
+        error: 'Folder „' + folder.getName() + '" nie jest folderem z zakresem remontu ' +
+               '(nazwa folderu musi zawierać „' + FOLDER_MUSI_ZAWIERAC + '").'
       });
     }
 
+    var znaleziono = znajdzPlikZakresu(folder);
+    if (!znaleziono.plik) {
+      return odpowiedz({
+        error: znaleziono.pusty
+          ? 'Folder „' + folder.getName() + '" jest pusty.'
+          : 'W folderze „' + folder.getName() + '" nie ma dokumentu do odczytu ' +
+            '(obsługiwane: dokument Google, .docx, .txt).'
+      });
+    }
+    var plik = znaleziono.plik;
+
     var mime = plik.getMimeType();
     var nazwa = plik.getName();
+    // Ile jeszcze czytelnych plików leżało obok — generator to pokaże,
+    // żeby nikt nie zdziwił się, że wzięliśmy „ten drugi".
+    var pominieto = znaleziono.wszystkie.length - 1;
 
     // Natywny dokument Google — czytany przez eksport z Dysku.
     // Świadomie NIE używamy DocumentApp: wymagałoby to uprawnienia
     // „przeglądanie, edytowanie, tworzenie i USUWANIE wszystkich dokumentów",
     // a skrypt ma wyłącznie czytać.
     if (mime === MimeType.GOOGLE_DOCS) {
-      return odpowiedz({ nazwa: nazwa, zrodlo: 'Dokument Google', tekst: eksportujJakoTekst(plik.getId()) });
+      return odpowiedz({ nazwa: nazwa, zrodlo: 'Dokument Google', pominieto: pominieto, tekst: eksportujJakoTekst(plik.getId()) });
     }
 
     // Zwykły tekst
-    if (mime === MimeType.PLAIN_TEXT) {
-      return odpowiedz({ nazwa: nazwa, zrodlo: 'Plik tekstowy', tekst: plik.getBlob().getDataAsString('UTF-8') });
+    if (mime === MimeType.PLAIN_TEXT || /\.txt$/i.test(nazwa)) {
+      return odpowiedz({ nazwa: nazwa, zrodlo: 'Plik tekstowy', pominieto: pominieto, tekst: plik.getBlob().getDataAsString('UTF-8') });
     }
 
     // Word — oddajemy plik, a generator rozpakuje go w przeglądarce
@@ -104,7 +121,7 @@ function doGet(e) {
       if (bajty.length > 7 * 1024 * 1024) {
         return odpowiedz({ error: 'Plik Worda jest za duży, żeby go przesłać (' + Math.round(bajty.length / 1048576) + ' MB). Pobierz go i wczytaj ręcznie.' });
       }
-      return odpowiedz({ nazwa: nazwa, zrodlo: 'Plik Word', docxBase64: Utilities.base64Encode(bajty) });
+      return odpowiedz({ nazwa: nazwa, zrodlo: 'Plik Word', pominieto: pominieto, docxBase64: Utilities.base64Encode(bajty) });
     }
 
     return odpowiedz({ error: 'Nieobsługiwany typ pliku: ' + mime + '. Obsługiwane: dokument Google, .docx, .txt.' });
@@ -114,20 +131,40 @@ function doGet(e) {
   }
 }
 
-/** Pierwszy plik w folderze, którego nazwa zaczyna się od „zakres".
- *  Dokumenty Google mają pierwszeństwo — są najtańsze w odczycie. */
+/** Wybiera dokument z zakresem. Nazwa pliku NIE ma znaczenia — liczy się to,
+ *  że leży w folderze z zakresem (to sprawdza doGet) i że da się go odczytać.
+ *
+ *  Kolejność: dokument Google → .docx → .txt. W obrębie jednego typu wygrywa
+ *  ostatnio modyfikowany, bo to zwykle ta wersja, nad którą ktoś pracował.
+ *  Zwraca { plik, pusty, wszystkie } — „wszystkie" to nazwy czytelnych plików,
+ *  żeby generator mógł pokazać, że w folderze leżało ich więcej niż jeden. */
 function znajdzPlikZakresu(folder) {
-  var pasujace = [];
+  var kandydaci = [];
+  var wszystkich = 0;
   var it = folder.getFiles();
   while (it.hasNext()) {
     var f = it.next();
-    if (f.getName().toLowerCase().indexOf(PRZEDROSTEK) === 0) pasujace.push(f);
+    wszystkich++;
+    var mime = f.getMimeType();
+    var nazwa = f.getName();
+    var ranga = -1;
+    if (mime === MimeType.GOOGLE_DOCS) ranga = 0;
+    else if (mime === MimeType.MICROSOFT_WORD || /\.docx$/i.test(nazwa)) ranga = 1;
+    else if (mime === MimeType.PLAIN_TEXT || /\.txt$/i.test(nazwa)) ranga = 2;
+    if (ranga >= 0) kandydaci.push({ plik: f, ranga: ranga, data: f.getLastUpdated().getTime(), nazwa: nazwa });
   }
-  if (!pasujace.length) return null;
-  for (var i = 0; i < pasujace.length; i++) {
-    if (pasujace[i].getMimeType() === MimeType.GOOGLE_DOCS) return pasujace[i];
-  }
-  return pasujace[0];
+
+  if (!kandydaci.length) return { plik: null, pusty: wszystkich === 0, wszystkie: [] };
+
+  kandydaci.sort(function (a, b) {
+    return a.ranga !== b.ranga ? a.ranga - b.ranga : b.data - a.data;
+  });
+
+  return {
+    plik: kandydaci[0].plik,
+    pusty: false,
+    wszystkie: kandydaci.map(function (k) { return k.nazwa; })
+  };
 }
 
 /* Eksport dokumentu Google do czystego tekstu przez API Dysku.
@@ -178,10 +215,16 @@ function pokazSekret() {
 function test_odczytu() {
   var FOLDER_DO_TESTU = 'wklej-tutaj-id-folderu';
   var folder = DriveApp.getFolderById(FOLDER_DO_TESTU);
-  var plik = znajdzPlikZakresu(folder);
-  if (!plik) { Logger.log('Nie znalazłem pliku zaczynającego się od „%s"', PRZEDROSTEK); return; }
-  Logger.log('Plik: %s (%s)', plik.getName(), plik.getMimeType());
-  if (plik.getMimeType() === MimeType.GOOGLE_DOCS) {
-    Logger.log('Początek treści:\n%s', eksportujJakoTekst(plik.getId()).slice(0, 500));
+  Logger.log('Folder: %s', folder.getName());
+  if (folder.getName().toLowerCase().indexOf(FOLDER_MUSI_ZAWIERAC) === -1) {
+    Logger.log('UWAGA: nazwa folderu nie zawiera „%s" — skrypt odmówi odczytu.', FOLDER_MUSI_ZAWIERAC);
+    return;
+  }
+  var w = znajdzPlikZakresu(folder);
+  if (!w.plik) { Logger.log(w.pusty ? 'Folder jest pusty.' : 'Brak czytelnego dokumentu w folderze.'); return; }
+  Logger.log('Czytelne pliki: %s', w.wszystkie.join(', '));
+  Logger.log('Wybrany: %s (%s)', w.plik.getName(), w.plik.getMimeType());
+  if (w.plik.getMimeType() === MimeType.GOOGLE_DOCS) {
+    Logger.log('Początek treści:\n%s', eksportujJakoTekst(w.plik.getId()).slice(0, 500));
   }
 }
