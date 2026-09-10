@@ -432,9 +432,10 @@ textarea { resize: vertical; line-height: 1.5; }
   <div class="section">
     <div class="section-title">Załącznik nr 1 — zakres prac</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <button class="btn-mini" onclick="wczytajZakresZDysku(false)" title="Pobierz zakres z folderu na Dysku">⤓ Z Dysku</button>
       <span id="driveLinkWrap"></span>
       <label class="btn-mini" style="cursor:pointer">
-        ⬆ Wczytaj z pliku Word
+        ⬆ Z pliku Word
         <input type="file" accept=".docx" style="display:none" onchange="wczytajZakresZDocx(this)">
       </label>
       <button class="btn-mini" onclick="reloadZakresFromMonday()" title="Wczytaj ponownie z Monday">↻ Z Monday</button>
@@ -519,6 +520,29 @@ textarea { resize: vertical; line-height: 1.5; }
   </div>
 
   <div class="cfg-card">
+    <h2>Zakres prac z Dysku Google</h2>
+    <div class="cd">
+      W Monday jest tylko link do folderu z zakresem — treść leży na Dysku. Mały skrypt w Waszym Google
+      podaje ją generatorowi, dzięki czemu Załącznik nr 1 wypełnia się sam po wybraniu inwestycji.
+      Kod skryptu i instrukcja wdrożenia: plik <code>google-apps-script/Kod.gs</code> w repozytorium.
+    </div>
+    <div class="field">
+      <label>Adres skryptu (kończy się na /exec)</label>
+      <input type="text" id="cfgDriveUrl" placeholder="https://script.google.com/macros/s/AKfy.../exec">
+    </div>
+    <div class="field">
+      <label>Tajny klucz (właściwość SEKRET w skrypcie)</label>
+      <input type="password" id="cfgDriveKey" placeholder="ten sam ciąg co w ustawieniach skryptu">
+      <div class="hint">Trafia do Supabase, nie do kodu na GitHubie.</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn btn-primary" style="flex:0 0 auto;padding:9px 18px;white-space:nowrap" onclick="saveConfig(true)">Zapisz dla całego zespołu</button>
+      <button class="btn btn-secondary" style="flex:0 0 auto;padding:9px 18px;white-space:nowrap" onclick="testDysk()">Sprawdź na przykładzie</button>
+    </div>
+    <div id="cfgDriveResult" style="margin-top:10px;font-size:12px"></div>
+  </div>
+
+  <div class="cfg-card">
     <h2>Tablice i kolumny</h2>
     <div class="cd">
       Wybierz tablice, a kolumny dopasują się automatycznie po nazwach. Jeśli coś trafi nie tam, gdzie powinno — popraw ręcznie.
@@ -581,6 +605,8 @@ const DEFAULT_BOARD_INV = '5030474286';
 
 let CFG = {
   proxyUrl: '',
+  driveUrl: '',        // adres skryptu Apps Script czytającego zakresy z Dysku
+  driveKey: '',        // tajny klucz do tego skryptu (nigdy w kodzie repozytorium)
   boardWyk: DEFAULT_BOARD_WYK,
   boardInv: DEFAULT_BOARD_INV,
   mapWyk: { addr:'', pesel:'', dowod:'', nip:'' },
@@ -683,10 +709,18 @@ async function loadConfig() {
   }
   const p = document.getElementById('cfgProxy');
   if (p) p.value = CFG.proxyUrl || '';
+  const du = document.getElementById('cfgDriveUrl');
+  if (du) du.value = CFG.driveUrl || '';
+  const dk = document.getElementById('cfgDriveKey');
+  if (dk) dk.value = CFG.driveKey || '';
 }
 
 async function saveConfig(shared) {
   CFG.proxyUrl = (document.getElementById('cfgProxy').value || '').trim();
+  const duEl = document.getElementById('cfgDriveUrl');
+  const dkEl = document.getElementById('cfgDriveKey');
+  if (duEl) CFG.driveUrl = (duEl.value || '').trim();
+  if (dkEl) CFG.driveKey = (dkEl.value || '').trim();
   CFG.boardWyk = document.getElementById('cfgBoardWyk').value || '';
   CFG.boardInv = document.getElementById('cfgBoardInv').value || '';
   ['addr','pesel','dowod','nip'].forEach(k => {
@@ -912,6 +946,38 @@ async function onBoardChange(which) {
   }
 }
 
+/* Sprawdzenie skryptu Dysku na pierwszej inwestycji, która ma link do folderu */
+async function testDysk() {
+  const out = document.getElementById('cfgDriveResult');
+  const url = (document.getElementById('cfgDriveUrl').value || '').trim();
+  const klucz = (document.getElementById('cfgDriveKey').value || '').trim();
+  if (!url || !klucz) {
+    out.innerHTML = '<span style="color:var(--red)">Wypełnij najpierw adres skryptu i klucz.</span>';
+    return;
+  }
+  out.innerHTML = '<span style="color:var(--text3)">Szukam inwestycji z linkiem do zakresu...</span>';
+  try {
+    await loadInwestycje(true);
+    const zLinkiem = inwestycje.find(p => /https?:\/\/\S*\/folders\//.test(p.zakres || ''));
+    if (!zLinkiem) throw new Error('Żadna inwestycja w Monday nie ma linku do folderu z zakresem.');
+    const folderId = folderIdZLinku((zLinkiem.zakres.match(/https?:\/\/\S+/) || [''])[0]);
+    out.innerHTML = '<span style="color:var(--text3)">Próbuję odczytać zakres dla „' + esc(zLinkiem.name) + '"...</span>';
+
+    const res = await fetch(url + '?klucz=' + encodeURIComponent(klucz) + '&folder=' + encodeURIComponent(folderId));
+    if (!res.ok) throw new Error('Skrypt odpowiedział ' + res.status);
+    const j = await res.json();
+    if (j.error) throw new Error(j.error);
+
+    const ile = j.tekst ? j.tekst.split(/\r?\n/).filter(s => s.trim()).length : null;
+    out.innerHTML = '<span style="color:var(--green)">✓ Działa. Dla „' + esc(zLinkiem.name) + '" odczytano „' +
+      esc(j.nazwa || '') + '" (' + esc(j.zrodlo || '') + ')' +
+      (ile ? ', ' + ile + ' linii tekstu' : ', plik Word do rozpakowania w przeglądarce') + '.</span>';
+  } catch (e) {
+    out.innerHTML = '<span style="color:var(--red)">Nie udało się: ' + esc(e.message || e) +
+      '<br>Sprawdź, czy skrypt jest wdrożony jako aplikacja internetowa z dostępem „Wszyscy" i czy klucz zgadza się z właściwością SEKRET.</span>';
+  }
+}
+
 async function testMonday() {
   const out = document.getElementById('cfgTestResult');
   const typed = (document.getElementById('cfgToken').value || '').trim();
@@ -1077,8 +1143,10 @@ function selectInv(id) {
   const b = document.getElementById('invBadge');
   b.style.display = 'block';
   let info;
-  if (link) {
-    info = '<div style="margin-top:6px">Zakres prac jest linkiem do folderu na Dysku — otwórz go przyciskiem „Otwórz na Dysku" w sekcji Załącznik nr 1, a plik Word wczytaj przyciskiem obok.</div>';
+  if (link && CFG.driveUrl && CFG.driveKey) {
+    info = '<div style="margin-top:6px">Pobieram zakres prac z Dysku...</div>';
+  } else if (link) {
+    info = '<div style="margin-top:6px">Zakres prac jest linkiem do folderu na Dysku — otwórz go przyciskiem „Otwórz na Dysku" w sekcji Załącznik nr 1, a pobrany plik wczytaj przyciskiem obok.</div>';
   } else if (zak) {
     info = '<br>Zakres prac wczytany (' + zak.split(/\n/).filter(l => l.trim()).length + ' linii)';
   } else {
@@ -1087,6 +1155,9 @@ function selectInv(id) {
   b.innerHTML = '<strong>' + esc(p.name) + '</strong>' +
     (p.area ? '<br>Powierzchnia użytkowa: ' + esc(cleanArea(p.area)) + ' m²' : '') + info;
   renderAll();
+
+  // Zakres sam ściąga się z Dysku, jeśli skrypt jest skonfigurowany
+  if (link && CFG.driveUrl && CFG.driveKey) wczytajZakresZDysku(true);
 }
 
 /* Przycisk otwierający folder z zakresem na Google Drive */
@@ -1102,64 +1173,7 @@ function renderDriveLink() {
   }
 }
 
-/* Wczytanie zakresu prac z pliku Word (.docx).
-   Zakresy leżą u nas na Dysku jako dokumenty Worda, więc zamiast
-   przepisywać je ręcznie — wrzucamy plik, a generator wyciąga akapity. */
-async function wczytajZakresZDocx(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const hint = document.getElementById('docxHint');
-  hint.textContent = 'Wczytywanie ' + file.name + '...';
-  hint.style.color = 'var(--text3)';
-  try {
-    if (typeof JSZip === 'undefined') throw new Error('Nie udało się załadować biblioteki do odczytu .docx');
-    const zip = await JSZip.loadAsync(file);
-    const entry = zip.file('word/document.xml');
-    if (!entry) throw new Error('To nie wygląda na plik .docx');
-    const xml = await entry.async('string');
-    const akapity = xml
-      .split('</w:p>')
-      .map(p => {
-        const bezTagow = p.replace(/<w:tab[^>]*\/>/g, '\t').replace(/<[^>]+>/g, '');
-        const ta = document.createElement('textarea');
-        ta.innerHTML = bezTagow;
-        return ta.value.replace(/\s+/g, ' ').trim();
-      })
-      .filter(Boolean);
-
-    if (!akapity.length) throw new Error('W pliku nie znalazłem tekstu');
-
-    /* Nagłówek dokumentu („ZAKRES REMONTU", „Lokalizacja: …", „Powierzchnia: …")
-       nie należy do listy punktów — wyciągamy z niego dane i odcinamy. */
-    let start = 0;
-    akapity.forEach((a, i) => {
-      const m1 = a.match(/^Lokalizacja:\s*(.+)$/i);
-      const m2 = a.match(/^Powierzchnia:\s*([\d.,]+)/i);
-      if (/^ZAKRES\b/i.test(a)) { setVal('zalTitle', a); start = Math.max(start, i + 1); }
-      if (m1) {
-        const czesci = m1[1].split(',');
-        if (czesci.length >= 2 && !g('pCity')) setVal('pCity', titleCasePl(czesci[0].trim()));
-        if (czesci.length >= 2 && !g('pStreet')) setVal('pStreet', czesci.slice(1).join(',').trim());
-        start = Math.max(start, i + 1);
-      }
-      if (m2) { if (!g('pArea')) setVal('pArea', m2[1].replace('.', ',')); start = Math.max(start, i + 1); }
-    });
-
-    setVal('zakres', akapity.slice(start).join('\n'));
-    renderAll(true);
-    const punkty = parseZakres(g('zakres'));
-    const ile = punkty.reduce((s, b) => s + b.items.length, 0);
-    hint.textContent = '✓ Wczytano z ' + file.name + ': ' + punkty.length + ' sekcji, ' + ile + ' punktów. Sprawdź i popraw poniżej.';
-    hint.style.color = 'var(--green)';
-  } catch (e) {
-    hint.textContent = 'Nie udało się wczytać: ' + (e.message || e);
-    hint.style.color = 'var(--red)';
-  } finally {
-    input.value = '';
-  }
-}
-
-/* Z nazwy pozycji "TARNOWSKIE GÓRY, Andersa 49/29" wyciąga miejscowość i ulicę */
+/* Z nazwy pozycji „TARNOWSKIE GÓRY, Andersa 49/29" wyciąga miejscowość i ulicę */
 function splitLocation(p, fallbackName) {
   let city = (p.city || '').trim();
   let street = (p.street || '').trim();
@@ -1175,6 +1189,7 @@ function splitLocation(p, fallbackName) {
   return { city: city, street: street };
 }
 
+/* „TARNOWSKIE GÓRY" → „Tarnowskie Góry"; tekst pisany normalnie zostawiamy */
 function titleCasePl(s) {
   if (!s) return s;
   if (s !== s.toUpperCase()) return s;
@@ -1188,24 +1203,156 @@ function cleanArea(a) {
   return (a || '').toString().replace(/m2|m²/gi, '').replace(/\s+/g, '').replace('.', ',').trim();
 }
 
+/* Ponowne pobranie danych inwestycji z Monday */
 async function reloadZakresFromMonday() {
   if (!state.inv) { alert('Najpierw wybierz inwestycję z listy.'); return; }
   await loadInwestycje(true);
   const fresh = inwestycje.find(x => x.id === state.inv.id);
   if (!fresh) { alert('Nie znalazłem tej pozycji w Monday.'); return; }
   state.inv = fresh;
+  if (fresh.area) setVal('pArea', cleanArea(fresh.area));
   const zak = (fresh.zakres || '').trim();
   const link = (zak.match(/https?:\/\/\S+/) || [''])[0];
   state.driveLink = link;
   renderDriveLink();
-  if (link) {
-    alert('W Monday jest tylko link do folderu z zakresem na Dysku, nie sama treść.\n\nOtwórz go przyciskiem „Otwórz na Dysku", pobierz plik Word i wczytaj przyciskiem „Wczytaj z pliku Word".');
-    return;
-  }
-  if (!zak) { alert('W Monday nie ma zakresu prac dla tej pozycji.'); return; }
+  if (link) { wczytajZakresZDysku(false); return; }
+  if (!zak) { zakresHint('W Monday nie ma zakresu prac dla tej pozycji.', 'var(--warn-text)'); return; }
   setVal('zakres', zak);
   renderAll(true);
 }
+
+/* ═══════════ Zakres prac: z pliku Word albo prosto z Dysku ═══════════ */
+
+/* Rozpakowanie .docx i wyciągnięcie akapitów. Word trzyma tekst w XML-u
+   wewnątrz zipa — bierzemy zawartość każdego <w:p> i czyścimy ze znaczników. */
+async function akapityZDocx(blob) {
+  if (typeof JSZip === 'undefined') throw new Error('Nie udało się załadować biblioteki do odczytu .docx');
+  const zip = await JSZip.loadAsync(blob);
+  const entry = zip.file('word/document.xml');
+  if (!entry) throw new Error('To nie wygląda na plik .docx');
+  const xml = await entry.async('string');
+  return normalizujLinie(xml.split('</w:p>').map(p => {
+    const bezTagow = p.replace(/<w:tab[^>]*\/>/g, '\t').replace(/<[^>]+>/g, '');
+    const ta = document.createElement('textarea');
+    ta.innerHTML = bezTagow;
+    return ta.value.replace(/\s+/g, ' ').trim();
+  }));
+}
+
+/* Puste linie zostawiamy — po nich poznajemy początek nowej sekcji.
+   Zwijamy tylko ciągi pustych do jednej i obcinamy je z brzegów. */
+function normalizujLinie(arr) {
+  const out = [];
+  arr.forEach(l => {
+    const s = (l || '').trim();
+    if (!s && (!out.length || !out[out.length - 1])) return;
+    out.push(s);
+  });
+  while (out.length && !out[out.length - 1]) out.pop();
+  return out;
+}
+
+/* Wspólne dla obu źródeł: z nagłówka dokumentu („ZAKRES REMONTU",
+   „Lokalizacja: …", „Powierzchnia: …") wyciągamy dane i odcinamy go,
+   bo to nie są punkty zakresu. Pól już wypełnionych nie nadpisujemy —
+   dane z Monday mają pierwszeństwo nad tym, co jest w pliku. */
+function zastosujAkapity(akapity) {
+  if (!akapity.length) throw new Error('Nie znalazłem w dokumencie tekstu');
+  let start = 0;
+  akapity.forEach((a, i) => {
+    const mLok = a.match(/^Lokalizacja:\s*(.+)$/i);
+    const mPow = a.match(/^Powierzchnia:\s*([\d.,]+)/i);
+    if (/^ZAKRES\b/i.test(a)) { setVal('zalTitle', a); start = Math.max(start, i + 1); }
+    if (mLok) {
+      const czesci = mLok[1].split(',');
+      if (czesci.length >= 2) {
+        if (!g('pCity')) setVal('pCity', titleCasePl(czesci[0].trim()));
+        if (!g('pStreet')) setVal('pStreet', czesci.slice(1).join(',').trim());
+      }
+      start = Math.max(start, i + 1);
+    }
+    if (mPow) {
+      if (!g('pArea')) setVal('pArea', mPow[1].replace('.', ','));
+      start = Math.max(start, i + 1);
+    }
+  });
+  setVal('zakres', akapity.slice(start).join('\n'));
+  renderAll(true);
+  const bloki = parseZakres(g('zakres'));
+  return { sekcji: bloki.length, punktow: bloki.reduce((s, b) => s + b.items.length, 0) };
+}
+
+function zakresHint(txt, kolor) {
+  const el = document.getElementById('docxHint');
+  if (!el) return;
+  el.textContent = txt;
+  el.style.color = kolor || 'var(--text3)';
+}
+
+/* Ręczne wczytanie pobranego pliku Word */
+async function wczytajZakresZDocx(input) {
+  const file = input.files[0];
+  if (!file) return;
+  zakresHint('Wczytywanie ' + file.name + '...');
+  try {
+    const st = zastosujAkapity(await akapityZDocx(file));
+    zakresHint('✓ Wczytano z ' + file.name + ': ' + st.sekcji + ' sekcji, ' + st.punktow + ' punktów. Sprawdź i popraw poniżej.', 'var(--green)');
+  } catch (e) {
+    zakresHint('Nie udało się wczytać: ' + (e.message || e), 'var(--red)');
+  } finally {
+    input.value = '';
+  }
+}
+
+/* Identyfikator folderu z linku Dysku */
+function folderIdZLinku(link) {
+  const m = (link || '').match(/\/folders\/([A-Za-z0-9_-]+)/);
+  return m ? m[1] : '';
+}
+
+/* Pobranie zakresu prosto z Dysku przez skrypt Google Apps Script.
+   `cicho` = wywołanie automatyczne po wyborze inwestycji — wtedy nie
+   zawracamy głowy komunikatami o braku konfiguracji. */
+async function wczytajZakresZDysku(cicho) {
+  const url = (CFG.driveUrl || '').trim();
+  const klucz = (CFG.driveKey || '').trim();
+  const folderId = folderIdZLinku(state.driveLink);
+
+  if (!url || !klucz) {
+    if (!cicho) zakresHint('Odczyt z Dysku nie jest skonfigurowany — ustaw go w ⚙ Konfiguracji.', 'var(--warn-text)');
+    return false;
+  }
+  if (!folderId) {
+    if (!cicho) zakresHint('Ta inwestycja nie ma w Monday linku do folderu z zakresem.', 'var(--warn-text)');
+    return false;
+  }
+
+  zakresHint('Pobieram zakres z Dysku...');
+  try {
+    const res = await fetch(url + '?klucz=' + encodeURIComponent(klucz) + '&folder=' + encodeURIComponent(folderId));
+    if (!res.ok) throw new Error('Skrypt odpowiedział ' + res.status);
+    const j = await res.json();
+    if (j.error) throw new Error(j.error);
+
+    let st;
+    if (j.tekst) {
+      st = zastosujAkapity(normalizujLinie(j.tekst.split(/\r?\n/)));
+    } else if (j.docxBase64) {
+      const bin = atob(j.docxBase64);
+      const buf = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+      st = zastosujAkapity(await akapityZDocx(buf));
+    } else {
+      throw new Error('Skrypt nie zwrócił treści');
+    }
+    zakresHint('✓ Wczytano z Dysku („' + (j.nazwa || 'dokument') + '"): ' + st.sekcji + ' sekcji, ' + st.punktow + ' punktów.', 'var(--green)');
+    return true;
+  } catch (e) {
+    zakresHint('Nie udało się pobrać z Dysku: ' + (e.message || e), 'var(--red)');
+    return false;
+  }
+}
+
 
 /* ─────────────── Formularz: pomocnicze ─────────────── */
 

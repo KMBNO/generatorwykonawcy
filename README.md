@@ -81,6 +81,26 @@ nazwy kolumny w Monday nie psuje generatora, a dodanie nowej nie wymaga zmiany k
    są w jednym pliku, załącznik zaczyna się od nowej strony. Przy okazji umowa zapisuje się
    w historii.
 
+### Zakres prac — skąd się bierze
+
+W tablicy „🚧 Remonty" kolumna „Zakres remontu (link)" trzyma **odnośnik do folderu na Dysku Google**,
+a nie samą treść — dokument z zakresem leży w tym folderze. Są trzy drogi, wszystkie w sekcji
+„Załącznik nr 1":
+
+1. **⤓ Z Dysku** — generator sam pobiera treść dokumentu i układa załącznik. Dzieje się to
+   automatycznie zaraz po wybraniu inwestycji, o ile skonfigurowany jest skrypt z
+   `google-apps-script/Kod.gs` (instrukcja wdrożenia w komentarzu na górze tego pliku,
+   adres i klucz wpisuje się w ⚙ Konfiguracji).
+2. **📂 Otwórz na Dysku** — otwiera folder tej inwestycji w nowej karcie.
+3. **⬆ Z pliku Word** — wczytanie pobranego `.docx`; generator rozpakowuje go w przeglądarce.
+
+Skrypt zwraca wyłącznie pliki, których nazwa zaczyna się od „zakres", i wymaga tajnego klucza —
+ten klucz trzymany jest w Supabase, nie w kodzie.
+
+**Uwaga o kolumnach lustrzanych:** większość kolumn na tej tablicy to `mirror` (lustra z tablicy
+Nieruchomości). Przez API zwracają one puste pole `text`, a wartość podają w `display_value` —
+generator to obsługuje. Gdyby ktoś kiedyś dopisywał tu nowe kolumny, warto o tym pamiętać.
+
 ### Zakres prac — jak jest formatowany
 
 Każda linia to jeden punkt listy. Nagłówkiem sekcji staje się linia, która:
@@ -117,19 +137,16 @@ W kodzie generatora **nie ma żadnych sekretów**:
 na górze pliku) token Monday nie opuszcza serwera, a funkcja dodatkowo odrzuca wszystko, co
 próbowałoby **zapisać** cokolwiek do Monday. Wystarczy wkleić jej adres w Konfiguracji.
 
-### ⚠️ Do zrobienia w starym generatorze sprzedaży
+### Generator sprzedaży — przeniesiony na ten sam mechanizm
 
-Repozytorium `KMBNO/generatorsprzedaz` jest publiczne, a w `index.html` znajdują się:
+Repozytorium `KMBNO/generatorsprzedaz` zawierało wcześniej w kodzie dane 98 osób (PESEL-e, numery
+dowodów, adresy), zeskanowany podpis i token Monday z prawem zapisu. Zostało to uporządkowane:
+stare repozytorium usunięto wraz z historią commitów i odtworzono od zera z czystym kodem, token
+w Monday unieważniono i wygenerowano nowy, a dane osobowe przeniesiono do Supabase (tabela
+`pelnomocnicy` oraz klucze `mocodawca` i `podpis_b64` w `ustawienia`).
 
-- token API Monday z uprawnieniem **zapisu** (`me:write`) — każdy może nim czytać i zmieniać dane
-  w Waszym Monday,
-- numer rachunku firmowego,
-- PESEL-e i numery dowodów pięciu osób (lista `REMOTE_REPS` i `EXTRA_AGENTS`).
-
-Zalecam: **unieważnić ten token w Monday** (Developers → My access tokens → usuń), wygenerować nowy
-i schować go tak jak tutaj. Uwaga: usunięcie tokena z pliku nie wystarcza — zostaje on w historii
-commitów, dlatego token trzeba unieważnić po stronie Monday. Chętnie przeniosę stary generator na
-ten sam mechanizm.
+Oba generatory korzystają dziś z tego samego projektu Supabase i **tego samego wiersza z tokenem
+Monday** — token wystarczy wkleić raz, w dowolnym z nich.
 
 ---
 
@@ -164,6 +181,7 @@ poprawione — mogę przenieść poprawkę do starego generatora.
 ```
 index.html                          ← cała aplikacja (jeden plik, bez budowania)
 sql/setup.sql                       ← tabele w Supabase, do wykonania raz
+google-apps-script/Kod.gs           ← skrypt czytający zakresy z Dysku Google
 supabase/functions/monday/index.ts  ← opcjonalne proxy ukrywające token Monday
 README.md
 ```
