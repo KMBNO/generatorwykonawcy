@@ -12,17 +12,28 @@
  *  1. Wejdź na script.google.com → „Nowy projekt".
  *  2. Wklej całą zawartość tego pliku, zastępując to, co tam jest.
  *  3. Nazwij projekt, np. „KMBNO — zakresy remontów".
- *  4. Ustaw tajny klucz:
- *       ⚙ Ustawienia projektu → „Właściwości skryptu" → „Dodaj właściwość"
- *       Nazwa:    SEKRET
- *       Wartość:  długi losowy ciąg, np. 30 znaków (wymyśl własny)
- *  5. Wdróż → „Nowe wdrożenie" → typ: „Aplikacja internetowa"
+ *  4. Włącz plik manifestu: ⚙ Ustawienia projektu → zaznacz
+ *     „Pokaż plik manifestu appsscript.json w edytorze", a następnie wklej
+ *     do niego zawartość pliku appsscript.json z tego repozytorium.
+ *     To ono ogranicza uprawnienia do samego odczytu Dysku.
+ *  5. Uruchom raz funkcję ustawSekret() — sama wylosuje tajny klucz,
+ *     zapisze go i wypisze w „Dzienniku wykonania". Skopiuj go.
+ *  6. Wdróż → „Nowe wdrożenie" → typ: „Aplikacja internetowa"
  *       Wykonaj jako:      Ja
  *       Kto ma dostęp:     Wszyscy
- *     Kliknij „Wdróż" i zatwierdź uprawnienia do Dysku.
- *  6. Skopiuj wyświetlony adres (kończy się na /exec).
- *  7. W generatorze: ⚙ Konfiguracja → sekcja „Zakres prac z Dysku Google"
+ *     Kliknij „Wdróż" i zatwierdź uprawnienia.
+ *  7. Skopiuj wyświetlony adres (kończy się na /exec).
+ *  8. W generatorze: ⚙ Konfiguracja → sekcja „Zakres prac z Dysku Google"
  *     → wklej adres i ten sam SEKRET → „Zapisz dla zespołu".
+ *
+ *  ─────────────── UPRAWNIENIA ───────────────
+ *
+ *  Skrypt prosi o dokładnie dwa uprawnienia, oba minimalne:
+ *    • Dysk Google — TYLKO ODCZYT (drive.readonly)
+ *    • połączenie z usługą zewnętrzną (script.external_request)
+ *
+ *  Nie prosi o prawo do edycji, tworzenia ani usuwania czegokolwiek.
+ *  Zakres jest wpisany na sztywno w pliku appsscript.json.
  *
  *  ─────────────── BEZPIECZEŃSTWO ───────────────
  *
@@ -74,10 +85,12 @@ function doGet(e) {
     var mime = plik.getMimeType();
     var nazwa = plik.getName();
 
-    // Natywny dokument Google — najprostszy i najczęstszy przypadek
+    // Natywny dokument Google — czytany przez eksport z Dysku.
+    // Świadomie NIE używamy DocumentApp: wymagałoby to uprawnienia
+    // „przeglądanie, edytowanie, tworzenie i USUWANIE wszystkich dokumentów",
+    // a skrypt ma wyłącznie czytać.
     if (mime === MimeType.GOOGLE_DOCS) {
-      var tekst = DocumentApp.openById(plik.getId()).getBody().getText();
-      return odpowiedz({ nazwa: nazwa, zrodlo: 'Dokument Google', tekst: tekst });
+      return odpowiedz({ nazwa: nazwa, zrodlo: 'Dokument Google', tekst: eksportujJakoTekst(plik.getId()) });
     }
 
     // Zwykły tekst
@@ -115,6 +128,20 @@ function znajdzPlikZakresu(folder) {
     if (pasujace[i].getMimeType() === MimeType.GOOGLE_DOCS) return pasujace[i];
   }
   return pasujace[0];
+}
+
+/* Eksport dokumentu Google do czystego tekstu przez API Dysku.
+   Używa tokenu samego skryptu, więc mieści się w uprawnieniu „tylko odczyt". */
+function eksportujJakoTekst(fileId) {
+  var url = 'https://www.googleapis.com/drive/v3/files/' + fileId + '/export?mimeType=text/plain';
+  var res = UrlFetchApp.fetch(url, {
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true
+  });
+  if (res.getResponseCode() !== 200) {
+    throw new Error('Nie udało się odczytać dokumentu (kod ' + res.getResponseCode() + ')');
+  }
+  return res.getContentText('UTF-8');
 }
 
 function odpowiedz(obj) {
@@ -155,6 +182,6 @@ function test_odczytu() {
   if (!plik) { Logger.log('Nie znalazłem pliku zaczynającego się od „%s"', PRZEDROSTEK); return; }
   Logger.log('Plik: %s (%s)', plik.getName(), plik.getMimeType());
   if (plik.getMimeType() === MimeType.GOOGLE_DOCS) {
-    Logger.log('Początek treści:\n%s', DocumentApp.openById(plik.getId()).getBody().getText().slice(0, 500));
+    Logger.log('Początek treści:\n%s', eksportujJakoTekst(plik.getId()).slice(0, 500));
   }
 }
