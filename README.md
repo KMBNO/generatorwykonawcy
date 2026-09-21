@@ -127,6 +127,58 @@ paragrafów przelicza się sama (§8, §9, …).
 
 ---
 
+## Role: kto przygotowuje, kto podpisuje
+
+Zespół dzieli się na dwie role. Rolę nadaje się raz, w SQL-u (`sql/role.sql`), i nie da się jej
+zmienić z poziomu przeglądarki — tabela `uprawnienia` nie ma polityki zapisu.
+
+| | przygotowujący | akceptujący |
+|---|---|---|
+| wypełnia formularz, widzi podgląd | ✓ | ✓ |
+| pobiera plik / drukuje | — | ✓ |
+| własny podpis na umowie | — | ✓ |
+| zakładka „Do akceptacji" | — | ✓ |
+| zmienia ustawienia zespołu (Monday, Dysk) | — | ✓ |
+
+**Obieg:** przygotowujący wypełnia umowę → **Wyślij do akceptacji** → umowa ląduje w zakładce
+„Do akceptacji" i (jeśli skonfigurowano powiadomienia) idzie mail → akceptujący otwiera, sprawdza,
+w razie potrzeby poprawia → **Akceptuję i podpisuję** → dopiero teraz na dokumencie pojawia się
+podpis i odblokowuje się pobranie. Zamiast akceptacji można odesłać umowę **do poprawki** z uwagą —
+autor zobaczy ją w historii.
+
+### Co tu naprawdę zabezpiecza, a co jest tylko wygodą
+
+Ukryty przycisk niczego nie chroni — kto otworzy konsolę przeglądarki, ten go znajdzie. Dlatego
+podział ról stoi na dwóch regułach po stronie serwera:
+
+1. **Podpis** leży w tabeli `podpisy`, w wierszu przypisanym do konkretnego konta, a reguła RLS
+   (`user_id = auth.uid()`) nie wypuszcza cudzych wierszy. Osoba przygotowująca umowę nie pobierze
+   tych bajtów żadnym sposobem — nie ma z czego złożyć podpisanego dokumentu.
+2. **Status `zaakceptowana`** może zapisać wyłącznie konto z rolą akceptującą — pilnuje tego
+   polityka `umowy_wyk_update`, nie kod strony.
+
+Ukrycie przycisku „PDF / Druk" i zablokowanie Ctrl+P to wygoda i jasny komunikat, a nie zapora.
+Podgląd umowy jest na ekranie, więc zrzut ekranu zawsze pozostaje możliwy — chodzi o to, żeby nie
+dało się wyprodukować dokumentu **z podpisem**, i to jest zamknięte szczelnie.
+
+### Zakładanie kont
+
+Supabase → **Authentication → Users → Add user** → e-mail + hasło + zaznacz **Auto Confirm User**.
+Potem uruchom `sql/role.sql` (Supabase → SQL Editor). Plik nadaje rolę „przygotowujacy" kontom
+wypisanym na jego końcu, a wszystkim pozostałym — „akceptujacy". Chcesz kogoś przenieść? Zmień listę
+i uruchom plik ponownie.
+
+### Powiadomienia mailem (opcjonalnie)
+
+`google-apps-script/Powiadomienia.gs` to osobny, mały skrypt w Google, który wysyła maila do osób
+akceptujących. Świadomie **osobny projekt** niż skrypt czytający zakresy z Dysku: tamten ma prawo
+tylko czytać Dysk, ten tylko wysyłać pocztę. Dwa wąskie uprawnienia zamiast jednego szerokiego.
+Skrypt wysyła wyłącznie na adresy `@kmbno.pl` i ma dzienny limit, więc nawet gdyby klucz wyciekł,
+nie posłuży do rozsyłania czegokolwiek na zewnątrz. Bez skonfigurowania go obieg działa normalnie —
+po prostu bez maila.
+
+---
+
 ## Bezpieczeństwo
 
 W kodzie generatora **nie ma żadnych sekretów**:
@@ -186,9 +238,12 @@ poprawione — mogę przenieść poprawkę do starego generatora.
 ## Struktura repozytorium
 
 ```
-index.html                          ← cała aplikacja (jeden plik, bez budowania)
-sql/setup.sql                       ← tabele w Supabase, do wykonania raz
-google-apps-script/Kod.gs           ← skrypt czytający zakresy z Dysku Google
-supabase/functions/monday/index.ts  ← opcjonalne proxy ukrywające token Monday
+index.html                                  ← cała aplikacja (jeden plik, bez budowania)
+sql/setup.sql                               ← tabele w Supabase, do wykonania raz
+sql/role.sql                                ← role, podpisy i obieg akceptacji
+google-apps-script/Kod.gs                   ← skrypt czytający zakresy z Dysku Google
+google-apps-script/Powiadomienia.gs         ← skrypt wysyłający maile o umowach do akceptacji
+google-apps-script/appsscript*.json         ← manifesty ograniczające uprawnienia obu skryptów
+supabase/functions/monday/index.ts          ← opcjonalne proxy ukrywające token Monday
 README.md
 ```
