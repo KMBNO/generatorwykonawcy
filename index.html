@@ -240,6 +240,7 @@ textarea { resize: vertical; line-height: 1.5; }
 .zal-meta { margin-bottom: 16px; }
 .zal-meta div { margin-bottom: 3px; }
 .zal-sec-title { font-weight: 600; margin: 14px 0 5px; }
+.zal-akapit { margin: 10px 0; text-align: justify; }
 
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -261,9 +262,45 @@ textarea { resize: vertical; line-height: 1.5; }
 .map-grid { display: grid; grid-template-columns: 130px 1fr; gap: 8px 12px; align-items: center; }
 .map-grid label { font-size: 12px; color: var(--text2); }
 
+/* ── Role i obieg akceptacji ── */
+.badge {
+  display: inline-block; min-width: 17px; margin-left: 6px; padding: 0 5px;
+  background: var(--green); color: #fff; border-radius: 9px;
+  font-size: 10px; font-weight: 700; line-height: 17px; text-align: center;
+}
+.akc-pane { display: none; height: calc(100vh - 53px); overflow-y: auto; padding: 32px; }
+.akc-row {
+  max-width: 820px; margin: 0 auto 10px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 18px;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+.akc-row .kto { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.akc-row .co { font-size: 13px; font-weight: 600; flex: 1 1 260px; }
+.rola-pas {
+  max-width: 820px; margin: 0 auto 18px; padding: 12px 16px; font-size: 12.5px;
+  background: var(--accent-bg); color: var(--accent-text);
+  border: 1px solid var(--border); border-radius: var(--radius-lg); line-height: 1.55;
+}
+.znak-roboczy {
+  margin: 0 0 14px; padding: 9px 14px; font-size: 12px; font-weight: 600;
+  background: var(--warn-bg); color: var(--warn-text);
+  border: 1px solid var(--warn-border); border-radius: var(--radius);
+}
+.sig .podpis-img { height: 46px; display: flex; align-items: flex-end; justify-content: center; }
+.sig .podpis-img img { max-height: 46px; max-width: 170px; }
+.sig .zpodpisem .line { margin-top: 4px; }
+.sig .podpis-opis { font-size: 10px; color: var(--text2); margin-top: 2px; }
+
 @media print {
   @page { margin: 20mm 22mm; size: A4; }
-  header, .sidebar, .doc-actions, .btn-row, .cfg-pane { display: none !important; }
+  header, .sidebar, .doc-actions, .btn-row, .cfg-pane, .akc-pane { display: none !important; }
+  /* Osoba przygotowująca umowę ma podgląd na ekranie, ale nie wydruk —
+     Ctrl+P zostawia samą informację, dlaczego nic się nie wydrukowało. */
+  body.rola-przygotowujacy .doc-wrap { display: none !important; }
+  body.rola-przygotowujacy .preview-pane::before {
+    content: 'Wersja robocza — wydruk dostępny dopiero po akceptacji.';
+    display: block; font-family: sans-serif; font-size: 12pt; padding: 2cm 0;
+  }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   html, body { height: auto; background: white !important; font-family: 'Times New Roman', Times, serif !important; }
   .app { height: auto; display: block; overflow: visible; }
@@ -313,6 +350,7 @@ textarea { resize: vertical; line-height: 1.5; }
   <div class="logo">KMBNO — Generator Umów z Wykonawcami</div>
   <div style="display:flex;gap:6px;align-items:center">
     <button id="navGenerator" class="nav-tab active" onclick="switchView('generator')">📄 Generator</button>
+    <button id="navAkcept" class="nav-tab" style="display:none" onclick="switchView('akceptacja')">✅ Do akceptacji<span id="akceptBadge" class="badge" style="display:none">0</span></button>
     <button id="navConfig" class="nav-tab" onclick="switchView('config')">⚙ Konfiguracja</button>
   </div>
   <div class="subtitle" style="display:flex;align-items:center;gap:10px">
@@ -455,6 +493,8 @@ textarea { resize: vertical; line-height: 1.5; }
         Nagłówek sekcji: linia zaczynająca się od <strong>#</strong> lub zakończona <strong>dwukropkiem</strong>
         (rozpoznawane są też krótkie linie przed listą, np. „Prace ogólne - wszystkie pomieszczenia").
         Pozostałe linie stają się punktami listy. Puste linie oddzielają sekcje.
+        Dłuższy tekst z kilku zdań, zakończony kropką (np. „WAŻNE: …"), wychodzi jako
+        zwykły akapit, bez kropki listy.
       </div>
     </div>
   </div>
@@ -479,7 +519,8 @@ textarea { resize: vertical; line-height: 1.5; }
 
 <div class="btn-row">
   <button class="btn btn-primary" onclick="renderAll(true)">Generuj umowę</button>
-  <button class="btn btn-secondary" onclick="downloadHTML()">PDF / Druk</button>
+  <button class="btn btn-secondary" id="btnPdfSide" onclick="downloadHTML()">PDF / Druk</button>
+  <button class="btn btn-primary" id="btnDoAkceptacji" style="display:none;background:var(--green);border-color:var(--green)" onclick="wyslijDoAkceptacji()">Wyślij do akceptacji</button>
 </div>
 </div><!-- sidebar -->
 
@@ -492,8 +533,73 @@ textarea { resize: vertical; line-height: 1.5; }
 
 </div><!-- app -->
 
+<!-- ═══════════ DO AKCEPTACJI ═══════════ -->
+<div class="akc-pane" id="akcPane">
+  <div class="rola-pas">
+    Umowy przygotowane przez zespół czekają tutaj na Twoją decyzję. <strong>Otwórz</strong> wczytuje
+    umowę do formularza — możesz ją jeszcze poprawić. <strong>Akceptuję i podpisuję</strong> dokłada
+    Twój podpis i dopiero wtedy odblokowuje pobranie pliku.
+  </div>
+  <div id="akcList"></div>
+</div>
+
 <!-- ═══════════ KONFIGURACJA ═══════════ -->
 <div class="cfg-pane" id="cfgPane">
+
+  <div class="cfg-card" id="cardRola">
+    <h2>Twoja rola</h2>
+    <div class="cd" id="cfgRolaOpis">—</div>
+  </div>
+
+  <div class="cfg-card" id="cardPodpis" style="display:none">
+    <h2>Twój podpis</h2>
+    <div class="cd">
+      Skan podpisu wchodzi na umowę pod „ZAMAWIAJĄCY" w chwili, gdy ją akceptujesz.
+      Leży w bazie w wierszu przypisanym do <strong>Twojego konta</strong> i reguła po stronie serwera
+      nie wypuszcza go nikomu innemu — osoby przygotowujące umowy nie mają jak go pobrać.
+      <br><br>
+      Najlepiej wychodzi podpis złożony czarnym pisakiem na białej kartce, sfotografowany
+      z góry i przycięty do samego podpisu. JPG albo PNG, do 1 MB.
+    </div>
+    <div class="field">
+      <label>Podpis w formie obrazka</label>
+      <input type="file" id="cfgPodpisPlik" accept="image/png,image/jpeg" onchange="wgrajPodpis(event)">
+    </div>
+    <div class="field">
+      <label>Podpis drukowany pod kreską (opcjonalnie)</label>
+      <input type="text" id="cfgPodpisOpis" placeholder="np. Brygida Bujno, Prezes Zarządu">
+    </div>
+    <div id="cfgPodpisPodglad" style="margin:10px 0"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn btn-primary" style="flex:0 0 auto;padding:9px 18px;white-space:nowrap" onclick="zapiszPodpis()">Zapisz podpis</button>
+      <button class="btn btn-secondary" style="flex:0 0 auto;padding:9px 18px;white-space:nowrap" onclick="usunPodpis()">Usuń podpis</button>
+    </div>
+    <div id="cfgPodpisResult" style="margin-top:10px;font-size:12px"></div>
+  </div>
+
+  <div class="cfg-card" id="cardMail" style="display:none">
+    <h2>Powiadomienia o umowach do akceptacji</h2>
+    <div class="cd">
+      Gdy ktoś wyśle umowę do akceptacji, osoby akceptujące dostają maila. Wysyłką zajmuje się
+      mały skrypt w Waszym Google — kod i instrukcja wdrożenia: plik
+      <code>google-apps-script/Powiadomienia.gs</code> w repozytorium.
+      Pole puste = obieg działa normalnie, tylko bez maila.
+    </div>
+    <div class="field">
+      <label>Adres skryptu (kończy się na /exec)</label>
+      <input type="text" id="cfgMailUrl" placeholder="https://script.google.com/macros/s/AKfy.../exec">
+    </div>
+    <div class="field">
+      <label>Tajny klucz (właściwość SEKRET w skrypcie)</label>
+      <input type="password" id="cfgMailKey" placeholder="ten sam ciąg co w ustawieniach skryptu">
+      <div class="hint">Trafia do Supabase, nie do kodu na GitHubie.</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn btn-primary" style="flex:0 0 auto;padding:9px 18px;white-space:nowrap" onclick="saveConfig(true)">Zapisz dla całego zespołu</button>
+      <button class="btn btn-secondary" style="flex:0 0 auto;padding:9px 18px;white-space:nowrap" onclick="testMail()">Wyślij próbny mail</button>
+    </div>
+    <div id="cfgMailResult" style="margin-top:10px;font-size:12px"></div>
+  </div>
 
   <div class="cfg-card">
     <h2>Połączenie z Monday</h2>
@@ -600,6 +706,31 @@ let sb = null, currentUser = null;
 let mondayToken = '';
 let historyCache = [];
 
+/* ─── Role ───────────────────────────────────────────────────────
+   'przygotowujacy' — wypełnia umowę i wysyła do akceptacji
+   'akceptujacy'    — sprawdza, podpisuje i pobiera gotowy dokument
+
+   Co naprawdę trzyma ten podział (nie interfejs, tylko serwer):
+   • podpis leży w tabeli „podpisy", a reguła RLS wypuszcza wyłącznie
+     wiersz zalogowanej osoby — przygotowujący nie ma czego podstawić,
+   • status „zaakceptowana" może zapisać tylko konto akceptujące,
+     co też pilnuje reguła w bazie, a nie ten plik.
+   Ukrywanie przycisków niżej to wygoda, nie zabezpieczenie. */
+const TABLE_ROLE   = 'uprawnienia';
+const TABLE_PODPIS = 'podpisy';
+
+let MOJA_ROLA   = 'przygotowujacy';
+let MOJ_PODPIS  = null;   // { obraz, opis } — tylko własny
+let AKCEPTUJACY = [];     // [{ email }] — komu wysłać powiadomienie
+let akceptCache = [];     // umowy czekające na decyzję
+
+/* Umowa otwarta z listy „Do akceptacji" albo wysłana do akceptacji
+   w tej sesji — żeby akceptacja trafiła w ten sam wiersz, a nie
+   zakładała kolejnego. */
+let biezacaUmowa = { id: null, status: null };
+
+function czyAkceptujacy() { return MOJA_ROLA === 'akceptujacy'; }
+
 /* Domyślne tablice Monday (KMBNO).
    Wykonawcy:     https://kmbno.monday.com/boards/5030474320
    Zakres remontu: https://kmbno.monday.com/boards/5030474286
@@ -612,6 +743,8 @@ let CFG = {
   proxyUrl: '',
   driveUrl: '',        // adres skryptu Apps Script czytającego zakresy z Dysku
   driveKey: '',        // tajny klucz do tego skryptu (nigdy w kodzie repozytorium)
+  mailUrl: '',         // adres skryptu wysyłającego powiadomienia o akceptacji
+  mailKey: '',         // tajny klucz do skryptu powiadomień
   boardWyk: DEFAULT_BOARD_WYK,
   boardInv: DEFAULT_BOARD_INV,
   mapWyk: { addr:'', pesel:'', dowod:'', nip:'' },
@@ -680,11 +813,67 @@ async function showApp() {
   if (who) who.textContent = userLabel(currentUser && currentUser.email);
 
   initDefaults();
+  await wczytajRole();
+  zastosujRole();
   await loadConfig();
   await loadToken();
   renderHistory();
+  if (czyAkceptujacy()) { wczytajPodpis(); odswiezAkceptacje(); }
   await loadWykonawcy();
   await loadInwestycje();
+}
+
+/* ─────────────── Role ─────────────── */
+
+async function wczytajRole() {
+  MOJA_ROLA = 'przygotowujacy';
+  AKCEPTUJACY = [];
+  try {
+    const { data, error } = await sb.from(TABLE_ROLE).select('user_id, email, rola');
+    if (error) throw error;
+    (data || []).forEach(r => {
+      if (r.user_id === currentUser.id) MOJA_ROLA = r.rola;
+      if (r.rola === 'akceptujacy' && r.email) AKCEPTUJACY.push({ email: r.email });
+    });
+  } catch (e) {
+    /* Tabela ról jeszcze nie istnieje (nie puszczono sql/role.sql) —
+       wtedy generator działa jak dawniej, bez podziału na role. */
+    console.warn('uprawnienia:', e.message || e);
+    MOJA_ROLA = 'akceptujacy';
+  }
+}
+
+function zastosujRole() {
+  const akc = czyAkceptujacy();
+  document.body.classList.toggle('rola-przygotowujacy', !akc);
+
+  const pokaz = (id, czy) => { const e = document.getElementById(id); if (e) e.style.display = czy ? '' : 'none'; };
+  pokaz('btnPdfSide', akc);
+  pokaz('btnDoAkceptacji', !akc);
+  pokaz('navAkcept', akc);
+  pokaz('cardPodpis', akc);
+  pokaz('cardMail', akc);
+
+  const opis = document.getElementById('cfgRolaOpis');
+  if (opis) {
+    opis.innerHTML = akc
+      ? 'Jesteś <strong>osobą akceptującą</strong>. Widzisz zakładkę „Do akceptacji", możesz wgrać swój podpis, '
+        + 'zatwierdzać umowy przygotowane przez zespół i pobierać gotowe pliki. '
+        + 'Zmieniasz też ustawienia wspólne dla całego zespołu.'
+      : 'Jesteś <strong>osobą przygotowującą umowy</strong>. Wypełniasz formularz, sprawdzasz podgląd '
+        + 'i wysyłasz umowę do akceptacji. Pobieranie pliku i podpis są po stronie osoby akceptującej — '
+        + 'to ustawienie po stronie serwera, nie da się go obejść w przeglądarce. '
+        + 'Ustawienia wspólne (Monday, Dysk) możesz podejrzeć, ale ich nie nadpiszesz.';
+  }
+
+  document.querySelectorAll('#cfgPane input, #cfgPane select, #cfgPane textarea').forEach(el => {
+    if (el.closest('#cardPodpis') || el.closest('#cardMail')) return;
+    el.disabled = !akc;
+  });
+  document.querySelectorAll('#cfgPane button').forEach(b => {
+    if (b.closest('#cardPodpis') || b.closest('#cardMail')) return;
+    if (/Zapisz|Wyczy/i.test(b.textContent)) b.disabled = !akc;
+  });
 }
 
 /* ─────────────── Ustawienia (Supabase → localStorage) ─────────────── */
@@ -723,6 +912,10 @@ async function loadConfig() {
   if (du) du.value = CFG.driveUrl || '';
   const dk = document.getElementById('cfgDriveKey');
   if (dk) dk.value = CFG.driveKey || '';
+  const mu = document.getElementById('cfgMailUrl');
+  if (mu) mu.value = CFG.mailUrl || '';
+  const mk = document.getElementById('cfgMailKey');
+  if (mk) mk.value = CFG.mailKey || '';
 }
 
 async function saveConfig(shared) {
@@ -731,6 +924,10 @@ async function saveConfig(shared) {
   const dkEl = document.getElementById('cfgDriveKey');
   if (duEl) CFG.driveUrl = (duEl.value || '').trim();
   if (dkEl) CFG.driveKey = (dkEl.value || '').trim();
+  const muEl = document.getElementById('cfgMailUrl');
+  const mkEl = document.getElementById('cfgMailKey');
+  if (muEl) CFG.mailUrl = (muEl.value || '').trim();
+  if (mkEl) CFG.mailKey = (mkEl.value || '').trim();
   /* Zapisujemy tylko to, co użytkownik faktycznie wybrał. Puste pole
      (bo lista nie została jeszcze wczytana) NIE kasuje działającego
      ustawienia — inaczej jedno kliknięcie „Zapisz" potrafi wyzerować
@@ -966,6 +1163,31 @@ async function onBoardChange(which) {
     renderMapUI(which, cols, map);
   } catch(e) {
     wrap.innerHTML = '<div style="color:var(--red);font-size:12px">' + esc(e.message || e) + '</div>';
+  }
+}
+
+/* Próbny mail — żeby nie sprawdzać skryptu dopiero na prawdziwej umowie */
+async function testMail() {
+  const out = document.getElementById('cfgMailResult');
+  const url = (document.getElementById('cfgMailUrl').value || '').trim();
+  const klucz = (document.getElementById('cfgMailKey').value || '').trim();
+  if (!url || !klucz) {
+    out.innerHTML = '<span style="color:var(--red)">Wypełnij najpierw adres skryptu i klucz.</span>';
+    return;
+  }
+  out.innerHTML = '<span style="color:var(--text3)">Wysyłam...</span>';
+  try {
+    const j = await (await fetch(url
+      + '?klucz=' + encodeURIComponent(klucz)
+      + '&do=' + encodeURIComponent(currentUser.email)
+      + '&temat=' + encodeURIComponent('Próbny mail z generatora umów')
+      + '&tresc=' + encodeURIComponent('Jeśli to czytasz, powiadomienia o umowach do akceptacji działają.'))).json();
+    if (j.error) throw new Error(j.error);
+    out.innerHTML = '<span style="color:var(--green)">✓ Wysłane na ' + esc(currentUser.email)
+      + '. Sprawdź skrzynkę (zajrzyj też do spamu).</span>';
+  } catch (e) {
+    out.innerHTML = '<span style="color:var(--red)">Nie udało się: ' + esc(e.message || e)
+      + '<br>Sprawdź, czy skrypt jest wdrożony jako aplikacja internetowa z dostępem „Wszyscy" i czy klucz zgadza się z właściwością SEKRET.</span>';
   }
 }
 
@@ -1291,15 +1513,41 @@ async function akapityZDocx(blob) {
 }
 
 /* Puste linie zostawiamy — po nich poznajemy początek nowej sekcji.
-   Zwijamy tylko ciągi pustych do jednej i obcinamy je z brzegów. */
+   Zwijamy tylko ciągi pustych do jednej i obcinamy je z brzegów.
+
+   Dodatkowo sklejamy akapity połamane na sztywno. W dokumentach z Dysku
+   zwykłe akapity bywają rozbite na linie po ~70 znaków (ktoś wkleił tekst
+   już zawinięty), a każda taka linia stawała się osobnym punktem listy.
+   Sklejamy tylko wtedy, gdy wszystko wskazuje na przeniesienie wiersza:
+   poprzednia linia jest długa, nie kończy zdania i nie jest nagłówkiem,
+   a bieżąca zaczyna się małą literą i nie ma znaku wypunktowania.
+   Punkty listy z Dokumentów Google zawsze zaczynają się od „*”, więc
+   prawdziwej listy to nie rusza. */
+var ZNAK_PUNKTU = /^\s*(?:[*•·▪‣]|[-–—]\s)/;
+
 function normalizujLinie(arr) {
-  const out = [];
+  const wstepne = [];
   arr.forEach(l => {
     const s = (l || '').trim();
-    if (!s && (!out.length || !out[out.length - 1])) return;
-    out.push(s);
+    if (/^[_\-–—=]{3,}$/.test(s)) return;            // linijka-separator z dokumentu
+    if (!s && (!wstepne.length || !wstepne[wstepne.length - 1])) return;
+    wstepne.push(s);
   });
-  while (out.length && !out[out.length - 1]) out.pop();
+  while (wstepne.length && !wstepne[wstepne.length - 1]) wstepne.pop();
+
+  const out = [];
+  wstepne.forEach(s => {
+    const poprz = out.length ? out[out.length - 1] : '';
+    const kontynuacja =
+      s &&
+      poprz &&
+      poprz.length >= 55 &&
+      !/[.!?:]$/.test(poprz) &&
+      !ZNAK_PUNKTU.test(s) &&
+      /^[a-ząćęłńóśźż(]/.test(s);
+    if (kontynuacja) out[out.length - 1] = poprz + ' ' + s;
+    else out.push(s);
+  });
   return out;
 }
 
@@ -1568,7 +1816,7 @@ function parseZakres(raw) {
   const lines = (raw || '').split(/\r?\n/);
   const blocks = [];
   let cur = null;
-  const push = () => { if (cur && (cur.title || cur.items.length)) blocks.push(cur); };
+  const push = () => { if (cur && (cur.title || (cur.tresc && cur.tresc.length))) blocks.push(cur); };
 
   /* Nagłówkiem sekcji jest linia, która:
      - zaczyna się od # / ## / ###, albo
@@ -1578,12 +1826,27 @@ function parseZakres(raw) {
        (czyli po pustej linii) — np. „Sprzątanie" */
   const isHeading = (line, next, startsBlock) => {
     const s = line.trim();
+    // Linia z kropką listy ze źródła nigdy nie jest nagłówkiem, nawet
+    // jeśli jest krótka i stoi zaraz po pustej linii.
+    if (ZNAK_PUNKTU.test(s)) return false;
     if (/^#{1,3}\s+/.test(s)) return true;
     if (/:$/.test(s)) return true;
     const shortPlain = s.length <= 75 && !/[,;.]$/.test(s);
     if (shortPlain && next && /[,;]$/.test(next.trim())) return true;
     if (shortPlain && startsBlock && next) return true;
     return false;
+  };
+
+  /* Akapitem (zwykłym tekstem, bez kropki listy) jest linia, która nie ma
+     w źródle znaku wypunktowania, składa się z kilku zdań i kończy kropką —
+     czyli proza w rodzaju „WAŻNE: Po zakończonym remoncie należy …".
+     Krótkie punkty zakresu tego nie łapią, nawet jeśli mają kropkę. */
+  const isParagraph = (line) => {
+    const s = line.trim();
+    if (ZNAK_PUNKTU.test(s)) return false;
+    if (s.length < 100) return false;
+    if (!/[.!?]$/.test(s)) return false;
+    return (s.match(/[.!?]\s+[A-ZĄĆĘŁŃÓŚŹŻ]/g) || []).length >= 1;
   };
 
   let startsBlock = true;
@@ -1597,12 +1860,18 @@ function parseZakres(raw) {
     startsBlock = false;
     if (isHeading(s, next, atBlockStart)) {
       push();
-      cur = { title: s.replace(/^#{1,3}\s+/, '').replace(/:$/, ''), items: [] };
+      cur = { title: s.replace(/^#{1,3}\s+/, '').replace(/:$/, ''), items: [], tresc: [] };
     } else {
-      if (!cur) cur = { title: '', items: [] };
-      // Zdejmujemy znaki wypunktowania ze źródła (*, -, •), bo listę
-      // rysuje już sam załącznik — inaczej wychodzi „• * treść".
-      cur.items.push(s.replace(/^[*•·▪‣\-–—]+\s*/, '').replace(/[,;]$/, ''));
+      if (!cur) cur = { title: '', items: [], tresc: [] };
+      if (isParagraph(s)) {
+        cur.tresc.push({ akapit: true, txt: s });
+      } else {
+        // Zdejmujemy znaki wypunktowania ze źródła (*, -, •), bo listę
+        // rysuje już sam załącznik — inaczej wychodzi „• * treść".
+        const txt = s.replace(/^[*•·▪‣\-–—]+\s*/, '').replace(/[,;]$/, '');
+        cur.items.push(txt);
+        cur.tresc.push({ akapit: false, txt: txt });
+      }
     }
   }
   push();
@@ -1758,10 +2027,7 @@ function renderAll(scrollTop) {
     '<li>Umowę sporządzono w dwóch jednobrzmiących egzemplarzach, po jednym dla każdej ze stron.</li>' +
   '</ol></div>' +
 
-  '<div class="sig">' +
-    '<div><div class="line">ZAMAWIAJĄCY</div></div>' +
-    '<div><div class="line">WYKONAWCA</div></div>' +
-  '</div>' +
+  blokPodpisow() +
 '</div>';
 
   /* ── Załącznik nr 1 ── */
@@ -1769,11 +2035,26 @@ function renderAll(scrollTop) {
   const zalTitle = g('zalTitle') || 'ZAKRES REMONTU';
   const locLine = [city ? city.toUpperCase() : '', street].filter(Boolean).join(', ');
 
+  /* Punkty idą do listy, akapity prozą — kolejność jak w źródle,
+     sąsiadujące punkty łączą się w jedną listę. */
+  const zalBlok = (b) => {
+    let html = b.title ? '<div class="zal-sec-title">' + esc(b.title) + '</div>' : '';
+    const tresc = b.tresc || b.items.map(t => ({ akapit: false, txt: t }));
+    let lista = [];
+    const domknij = () => {
+      if (lista.length) html += '<ul>' + lista.map(i => '<li>' + esc(i) + '</li>').join('') + '</ul>';
+      lista = [];
+    };
+    tresc.forEach(w => {
+      if (w.akapit) { domknij(); html += '<p class="zal-akapit">' + esc(w.txt) + '</p>'; }
+      else lista.push(w.txt);
+    });
+    domknij();
+    return html;
+  };
+
   const zalBody = blocks.length
-    ? blocks.map(b =>
-        (b.title ? '<div class="zal-sec-title">' + esc(b.title) + '</div>' : '') +
-        (b.items.length ? '<ul>' + b.items.map(i => '<li>' + esc(i) + '</li>').join('') + '</ul>' : '')
-      ).join('')
+    ? blocks.map(zalBlok).join('')
     : '<p style="color:var(--text3)">Zakres prac nie został jeszcze wpisany — wybierz inwestycję z Monday albo wpisz zakres ręcznie w panelu po lewej.</p>';
 
   const zalacznik =
@@ -1785,18 +2066,26 @@ function renderAll(scrollTop) {
     '<div><strong>Powierzchnia:</strong> ' + (area ? esc(area) + ' m²' : blank('')) + '</div>' +
   '</div>' +
   zalBody +
-  '<div class="sig">' +
-    '<div><div class="line">ZAMAWIAJĄCY</div></div>' +
-    '<div><div class="line">WYKONAWCA</div></div>' +
-  '</div>' +
+  blokPodpisow() +
 '</div>';
+
+  const akcja = czyAkceptujacy()
+    ? '<button class="btn btn-primary" style="flex:0 0 auto;padding:8px 16px;white-space:nowrap" onclick="downloadHTML()">PDF / Druk</button>'
+    : '<button class="btn btn-primary" style="flex:0 0 auto;padding:8px 16px;white-space:nowrap;background:var(--green);border-color:var(--green)" onclick="wyslijDoAkceptacji()">Wyślij do akceptacji</button>';
+
+  const pas =
+    !czyAkceptujacy()
+      ? '<div class="znak-roboczy">Wersja robocza — dokument nabiera mocy dopiero po akceptacji i podpisie. Pobranie pliku jest po stronie osoby akceptującej.</div>'
+      : (biezacaUmowa.status === 'do_akceptacji'
+          ? '<div class="znak-roboczy">Ta umowa czeka na Twoją decyzję — otwórz zakładkę „Do akceptacji", żeby ją zatwierdzić i podpisać.</div>'
+          : '');
 
   pane.innerHTML =
     '<div class="doc-actions">' +
       '<button class="btn btn-secondary" style="flex:0 0 auto;padding:8px 16px;white-space:nowrap" onclick="copyDoc()">Kopiuj tekst</button>' +
       '<button class="btn btn-secondary" style="flex:0 0 auto;padding:8px 16px;white-space:nowrap" id="btnEdit" onclick="toggleEdit()">✏️ Edytuj</button>' +
-      '<button class="btn btn-primary" style="flex:0 0 auto;padding:8px 16px;white-space:nowrap" onclick="downloadHTML()">PDF / Druk</button>' +
-    '</div>' +
+      akcja +
+    '</div>' + pas +
     '<div class="doc-wrap" id="umowaWrap">' + umowa + '</div>' +
     '<div class="doc-wrap" id="zalacznikWrap">' + zalacznik + '</div>';
 
@@ -1840,13 +2129,26 @@ function copyDoc() {
 /* ─────────────── Eksport do druku / PDF ─────────────── */
 
 function downloadHTML() {
-  const a = document.getElementById('umowaContent');
-  if (!a) { renderAll(true); }
+  if (!czyAkceptujacy()) {
+    alert('Pobranie umowy jest po stronie osoby akceptującej.\n\n'
+      + 'Kliknij „Wyślij do akceptacji" — po zatwierdzeniu i podpisaniu\n'
+      + 'gotowy plik pobierze osoba, która umowę podpisuje.');
+    return;
+  }
+  if (!document.getElementById('umowaContent')) renderAll();
+
+  // Podpis wchodzi na dokument dopiero w chwili pobrania przez osobę
+  // akceptującą — dlatego najpierw status, potem ponowne złożenie widoku.
+  if (biezacaUmowa.status !== 'zaakceptowana') {
+    biezacaUmowa.status = 'zaakceptowana';
+    renderAll();
+  }
+
   const umowaEl = document.getElementById('umowaContent');
   const zalEl = document.getElementById('zalacznikContent');
   if (!umowaEl) { alert('Najpierw wygeneruj umowę.'); return; }
 
-  saveToHistory(true);
+  if (!biezacaUmowa.id) saveToHistory(true);
 
   const w = getWyk();
   const nameSlug = (w.name || 'wykonawca').replace(/\s+/g, '_').replace(/[^\wąćęłńóśżźĄĆĘŁŃÓŚŻŹ_-]/g, '');
@@ -1872,10 +2174,15 @@ function downloadHTML() {
 '  .sig{width:100%;margin-top:3em;display:flex;justify-content:space-between}\n' +
 '  .sig>div{width:44%;text-align:center}\n' +
 '  .sig .line{border-top:1px solid #000;padding-top:0.3em;margin-top:2.5em;font-size:9.5pt}\n' +
+'  .sig .podpis-img{height:2.6em;display:flex;align-items:flex-end;justify-content:center}\n' +
+'  .sig .podpis-img img{max-height:2.6em;max-width:170px}\n' +
+'  .sig .zpodpisem .line{margin-top:0.2em}\n' +
+'  .sig .podpis-opis{font-size:8.5pt;margin-top:0.15em}\n' +
 '  .zal-head{text-align:right;font-size:10pt;margin-bottom:1.2em}\n' +
 '  .zal-meta{margin-bottom:1em}\n' +
 '  .zal-meta div{margin-bottom:0.2em}\n' +
 '  .zal-sec-title{font-weight:bold;margin:0.9em 0 0.3em;page-break-after:avoid;break-after:avoid}\n' +
+'  .zal-akapit{margin:0.7em 0;text-align:justify}\n' +
 '  .zalacznik{page-break-before:always;break-before:page}\n' +
 '  .druk-btn{text-align:center;margin-bottom:1cm;display:flex;gap:10px;justify-content:center}\n' +
 '  button{padding:9px 22px;font-size:13px;background:#1a1916;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:sans-serif}\n' +
@@ -1895,6 +2202,293 @@ umowaEl.innerHTML + '\n' +
   link.click();
   document.body.removeChild(link);
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/* ─────────────── Podpis (tylko własny) ─────────────── */
+
+let PODPIS_NOWY = null;   // obrazek wybrany w Konfiguracji, jeszcze niezapisany
+
+async function wczytajPodpis() {
+  try {
+    const { data, error } = await sb.from(TABLE_PODPIS)
+      .select('obraz, opis').eq('user_id', currentUser.id).maybeSingle();
+    if (error) throw error;
+    MOJ_PODPIS = data && data.obraz ? { obraz: data.obraz, opis: data.opis || '' } : null;
+  } catch (e) { MOJ_PODPIS = null; }
+  renderPodpisPodglad();
+}
+
+function renderPodpisPodglad() {
+  const box = document.getElementById('cfgPodpisPodglad');
+  if (!box) return;
+  const obraz = PODPIS_NOWY || (MOJ_PODPIS && MOJ_PODPIS.obraz);
+  box.innerHTML = obraz
+    ? '<img src="data:image/png;base64,' + obraz + '" style="max-width:220px;max-height:90px;border:1px solid var(--border);border-radius:6px;padding:6px;background:#fff">'
+      + (PODPIS_NOWY ? '<div style="font-size:11px;color:var(--warn-text);margin-top:6px">Wybrany plik — kliknij „Zapisz podpis", żeby go zachować.</div>' : '')
+    : '<div style="font-size:12px;color:var(--text3)">Podpis nie jest jeszcze wgrany — umowa wydrukuje się z pustą kreską.</div>';
+  const opisPole = document.getElementById('cfgPodpisOpis');
+  if (opisPole && !opisPole.value && MOJ_PODPIS) opisPole.value = MOJ_PODPIS.opis || '';
+}
+
+function wgrajPodpis(ev) {
+  const plik = ev.target.files && ev.target.files[0];
+  const out = document.getElementById('cfgPodpisResult');
+  if (!plik) return;
+  if (plik.size > 1024 * 1024) {
+    out.innerHTML = '<span style="color:var(--red)">Plik ma ' + Math.round(plik.size / 1024) + ' kB — zmieść się proszę w 1 MB.</span>';
+    ev.target.value = '';
+    return;
+  }
+  const fr = new FileReader();
+  fr.onload = () => {
+    PODPIS_NOWY = String(fr.result).split(',')[1] || '';
+    out.textContent = '';
+    renderPodpisPodglad();
+  };
+  fr.readAsDataURL(plik);
+}
+
+async function zapiszPodpis() {
+  const out = document.getElementById('cfgPodpisResult');
+  const opis = (document.getElementById('cfgPodpisOpis').value || '').trim();
+  const obraz = PODPIS_NOWY || (MOJ_PODPIS && MOJ_PODPIS.obraz);
+  if (!obraz) { out.innerHTML = '<span style="color:var(--red)">Najpierw wybierz plik z podpisem.</span>'; return; }
+  out.innerHTML = '<span style="color:var(--text3)">Zapisuję...</span>';
+  try {
+    const { error } = await sb.from(TABLE_PODPIS).upsert(
+      { user_id: currentUser.id, obraz: obraz, opis: opis, zaktualizowano: new Date().toISOString() },
+      { onConflict: 'user_id' }
+    );
+    if (error) throw error;
+    MOJ_PODPIS = { obraz: obraz, opis: opis };
+    PODPIS_NOWY = null;
+    renderPodpisPodglad();
+    out.innerHTML = '<span style="color:var(--green)">✓ Podpis zapisany. Wejdzie na umowy, które zaakceptujesz.</span>';
+    renderAll();
+  } catch (e) {
+    out.innerHTML = '<span style="color:var(--red)">Nie udało się zapisać: ' + esc(e.message || e) + '</span>';
+  }
+}
+
+async function usunPodpis() {
+  if (!confirm('Usunąć zapisany podpis?')) return;
+  const out = document.getElementById('cfgPodpisResult');
+  try {
+    const { error } = await sb.from(TABLE_PODPIS).delete().eq('user_id', currentUser.id);
+    if (error) throw error;
+    MOJ_PODPIS = null; PODPIS_NOWY = null;
+    document.getElementById('cfgPodpisPlik').value = '';
+    renderPodpisPodglad();
+    out.innerHTML = '<span style="color:var(--text2)">Podpis usunięty.</span>';
+    renderAll();
+  } catch (e) {
+    out.innerHTML = '<span style="color:var(--red)">Nie udało się usunąć: ' + esc(e.message || e) + '</span>';
+  }
+}
+
+/* Blok podpisów pod umową i pod załącznikiem. Podpis wchodzi tylko wtedy,
+   gdy umowa jest zaakceptowana i mamy własny skan — nigdy „na podgląd". */
+function blokPodpisow() {
+  const zpodpisem = biezacaUmowa.status === 'zaakceptowana' && MOJ_PODPIS && MOJ_PODPIS.obraz;
+  const lewa = zpodpisem
+    ? '<div class="zpodpisem">'
+        + '<div class="podpis-img"><img src="data:image/png;base64,' + MOJ_PODPIS.obraz + '" alt="podpis"></div>'
+        + '<div class="line">ZAMAWIAJĄCY</div>'
+        + (MOJ_PODPIS.opis ? '<div class="podpis-opis">' + esc(MOJ_PODPIS.opis) + '</div>' : '')
+      + '</div>'
+    : '<div><div class="line">ZAMAWIAJĄCY</div></div>';
+  return '<div class="sig">' + lewa + '<div><div class="line">WYKONAWCA</div></div></div>';
+}
+
+/* ─────────────── Obieg akceptacji ─────────────── */
+
+function brakiDoWyslania() {
+  const braki = [];
+  const w = getWyk();
+  if (!w.name) braki.push('wykonawca');
+  if (!g('pCity') && !g('pStreet')) braki.push('adres lokalu');
+  if (!g('kwota')) braki.push('kwota');
+  if (!g('dStart') || !g('dEnd')) braki.push('terminy');
+  if (!g('zakres')) braki.push('zakres prac');
+  return braki;
+}
+
+async function wyslijDoAkceptacji() {
+  if (!sb || !currentUser) { alert('Musisz być zalogowany.'); return; }
+  const braki = brakiDoWyslania();
+  if (braki.length && !confirm('Brakuje: ' + braki.join(', ') + '.\n\nWysłać mimo to?')) return;
+
+  const btn = document.getElementById('btnDoAkceptacji');
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Wysyłam...'; }
+
+  const snap = getSnapshot();
+  const etykieta = await unikalnaEtykieta(snapLabel(snap));
+  snap.label = etykieta;
+
+  try {
+    const wiersz = {
+      autor: userLabel(currentUser.email),
+      autor_id: currentUser.id,
+      etykieta: etykieta,
+      dane: snap,
+      status: 'do_akceptacji',
+      uwagi: null
+    };
+    let id = biezacaUmowa.id;
+    if (id) {
+      const { error } = await sb.from(TABLE_UMOWY).update(wiersz).eq('id', id);
+      if (error) throw error;
+    } else {
+      const { data, error } = await sb.from(TABLE_UMOWY).insert(wiersz).select('id').single();
+      if (error) throw error;
+      id = data.id;
+    }
+    biezacaUmowa = { id: id, status: 'do_akceptacji' };
+
+    const mail = await powiadomOAkceptacji(etykieta);
+    await renderHistory();
+    renderAll();
+    if (btn) { btn.textContent = '✓ Wysłano'; setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2500); }
+    alert('Umowa poszła do akceptacji.\n\n' + etykieta + '\n\n' + mail);
+  } catch (e) {
+    if (btn) { btn.textContent = orig; btn.disabled = false; }
+    alert('Nie udało się wysłać:\n' + (e.message || e));
+  }
+}
+
+async function powiadomOAkceptacji(etykieta) {
+  if (!CFG.mailUrl || !CFG.mailKey) return 'Powiadomienie mailowe nie jest skonfigurowane — daj znać osobiście.';
+  const adresy = AKCEPTUJACY.map(a => a.email).filter(Boolean).join(',');
+  if (!adresy) return 'Nie ma komu wysłać maila — brak osób z rolą akceptującą.';
+  try {
+    const url = CFG.mailUrl
+      + '?klucz=' + encodeURIComponent(CFG.mailKey)
+      + '&do=' + encodeURIComponent(adresy)
+      + '&temat=' + encodeURIComponent('Umowa do akceptacji: ' + etykieta)
+      + '&tresc=' + encodeURIComponent(
+          userLabel(currentUser.email) + ' przygotował(a) umowę i czeka na akceptację.\n\n'
+          + etykieta + '\n\nOtwórz generator → zakładka „Do akceptacji".');
+    const j = await (await fetch(url)).json();
+    if (j.error) throw new Error(j.error);
+    return 'Powiadomienie poszło na: ' + adresy;
+  } catch (e) {
+    return 'Umowa zapisana, ale mail nie poszedł (' + (e.message || e) + ').';
+  }
+}
+
+async function odswiezAkceptacje() {
+  const list = document.getElementById('akcList');
+  const badge = document.getElementById('akceptBadge');
+  if (!list) return;
+  try {
+    const { data, error } = await sb.from(TABLE_UMOWY)
+      .select('id, utworzono, autor, etykieta, dane, status, uwagi')
+      .eq('status', 'do_akceptacji')
+      .order('utworzono', { ascending: false });
+    if (error) throw error;
+    akceptCache = data || [];
+  } catch (e) {
+    list.innerHTML = '<div class="akc-row" style="color:var(--red)">Nie udało się wczytać: ' + esc(e.message || e) + '</div>';
+    return;
+  }
+
+  if (badge) {
+    badge.textContent = akceptCache.length;
+    badge.style.display = akceptCache.length ? 'inline-block' : 'none';
+  }
+
+  if (!akceptCache.length) {
+    list.innerHTML = '<div class="akc-row" style="color:var(--text3);justify-content:center">Nic nie czeka na akceptację.</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  akceptCache.forEach((row, i) => {
+    const dt = row.utworzono ? new Date(row.utworzono) : null;
+    const kiedy = dt ? String(dt.getDate()).padStart(2, '0') + '.' + String(dt.getMonth() + 1).padStart(2, '0') + '.' + dt.getFullYear()
+      + ' ' + String(dt.getHours()).padStart(2, '0') + ':' + String(dt.getMinutes()).padStart(2, '0') : '';
+    const wrap = document.createElement('div');
+    wrap.className = 'akc-row';
+    const co = document.createElement('div');
+    co.className = 'co';
+    co.innerHTML = esc(row.etykieta || 'Umowa')
+      + '<div class="kto">' + esc(row.autor || 'nieznany autor') + (kiedy ? ' · ' + kiedy : '') + '</div>';
+    const btns = document.createElement('div');
+    btns.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap';
+
+    const bOtw = document.createElement('button');
+    bOtw.className = 'btn btn-secondary';
+    bOtw.style.cssText = 'flex:0 0 auto;padding:7px 14px;white-space:nowrap';
+    bOtw.textContent = 'Otwórz';
+    bOtw.addEventListener('click', () => otworzDoAkceptacji(i));
+
+    const bOk = document.createElement('button');
+    bOk.className = 'btn btn-primary';
+    bOk.style.cssText = 'flex:0 0 auto;padding:7px 14px;white-space:nowrap;background:var(--green);border-color:var(--green)';
+    bOk.textContent = 'Akceptuję i podpisuję';
+    bOk.addEventListener('click', () => akceptuj(row.id, i));
+
+    const bNie = document.createElement('button');
+    bNie.className = 'btn btn-secondary';
+    bNie.style.cssText = 'flex:0 0 auto;padding:7px 14px;white-space:nowrap;color:var(--red)';
+    bNie.textContent = 'Do poprawki';
+    bNie.addEventListener('click', () => odrzuc(row.id));
+
+    btns.appendChild(bOtw); btns.appendChild(bOk); btns.appendChild(bNie);
+    wrap.appendChild(co); wrap.appendChild(btns);
+    list.appendChild(wrap);
+  });
+}
+
+function otworzDoAkceptacji(i) {
+  const row = akceptCache[i];
+  if (!row) return;
+  wczytajSnapshot(row.dane);
+  biezacaUmowa = { id: row.id, status: row.status };
+  switchView('generator');
+  renderAll(true);
+}
+
+async function akceptuj(id, i) {
+  if (!MOJ_PODPIS || !MOJ_PODPIS.obraz) {
+    if (!confirm('Nie masz wgranego podpisu — umowa wyjdzie z pustą kreską.\n\nAkceptować mimo to?')) return;
+  }
+  try {
+    const { error } = await sb.from(TABLE_UMOWY).update({
+      status: 'zaakceptowana',
+      akceptant: userLabel(currentUser.email),
+      akceptant_id: currentUser.id,
+      zaakceptowano: new Date().toISOString(),
+      uwagi: null
+    }).eq('id', id);
+    if (error) throw error;
+
+    const row = akceptCache[i];
+    if (row) { wczytajSnapshot(row.dane); }
+    biezacaUmowa = { id: id, status: 'zaakceptowana' };
+    await odswiezAkceptacje();
+    await renderHistory();
+    switchView('generator');
+    renderAll(true);
+  } catch (e) {
+    alert('Nie udało się zaakceptować:\n' + (e.message || e));
+  }
+}
+
+async function odrzuc(id) {
+  const uwagi = prompt('Co poprawić? Autor zobaczy tę uwagę w historii.');
+  if (uwagi === null) return;
+  try {
+    const { error } = await sb.from(TABLE_UMOWY).update({
+      status: 'odrzucona', uwagi: uwagi || 'Do poprawki'
+    }).eq('id', id);
+    if (error) throw error;
+    await odswiezAkceptacje();
+    await renderHistory();
+  } catch (e) {
+    alert('Nie udało się odesłać do poprawki:\n' + (e.message || e));
+  }
 }
 
 /* ─────────────── Historia (Supabase) ─────────────── */
@@ -1921,13 +2515,11 @@ function snapLabel(s) {
   return who + ' — ' + where;
 }
 
-async function saveToHistory(silent) {
-  if (!sb || !currentUser) { if (!silent) alert('Musisz być zalogowany, aby zapisać umowę.'); return; }
-  const snap = getSnapshot();
-  const base = snapLabel(snap);
+/* „Kowalski — Iława, Kościuszki 9/8", a przy powtórce „… (2)". */
+async function unikalnaEtykieta(base) {
   try {
-    const { data: all, error: errAll } = await sb.from(TABLE_UMOWY).select('etykieta');
-    if (errAll) throw errAll;
+    const { data: all, error } = await sb.from(TABLE_UMOWY).select('etykieta');
+    if (error) throw error;
     let max = 0;
     (all || []).forEach(r => {
       const e = (r.etykieta || '').trim();
@@ -1935,12 +2527,28 @@ async function saveToHistory(silent) {
       const m = e.match(/^(.*) \((\d+)\)$/);
       if (m && m[1] === base) max = Math.max(max, parseInt(m[2], 10));
     });
-    const label = max === 0 ? base : base + ' (' + (max + 1) + ')';
+    return max === 0 ? base : base + ' (' + (max + 1) + ')';
+  } catch (e) { return base; }
+}
+
+async function saveToHistory(silent) {
+  if (!sb || !currentUser) { if (!silent) alert('Musisz być zalogowany, aby zapisać umowę.'); return; }
+  const snap = getSnapshot();
+  try {
+    const label = await unikalnaEtykieta(snapLabel(snap));
     snap.label = label;
-    const { error } = await sb.from(TABLE_UMOWY).insert({
-      autor: userLabel(currentUser.email), etykieta: label, dane: snap
-    });
+    const { data, error } = await sb.from(TABLE_UMOWY).insert({
+      autor: userLabel(currentUser.email),
+      autor_id: currentUser.id,
+      etykieta: label,
+      dane: snap,
+      status: czyAkceptujacy() ? 'zaakceptowana' : 'roboczy',
+      akceptant: czyAkceptujacy() ? userLabel(currentUser.email) : null,
+      akceptant_id: czyAkceptujacy() ? currentUser.id : null,
+      zaakceptowano: czyAkceptujacy() ? new Date().toISOString() : null
+    }).select('id').single();
     if (error) throw error;
+    biezacaUmowa = { id: data.id, status: czyAkceptujacy() ? 'zaakceptowana' : 'roboczy' };
     await renderHistory();
   } catch(e) {
     console.error('saveToHistory:', e);
@@ -1956,7 +2564,7 @@ async function renderHistory() {
   list.innerHTML = '<div style="font-size:11px;color:var(--text3)">Wczytywanie...</div>';
   try {
     const { data, error } = await sb.from(TABLE_UMOWY)
-      .select('id, utworzono, autor, etykieta, dane')
+      .select('id, utworzono, autor, etykieta, dane, status, uwagi, akceptant')
       .order('utworzono', { ascending: false }).limit(100);
     if (error) throw error;
     historyCache = data || [];
@@ -1970,7 +2578,21 @@ async function renderHistory() {
       wrap.style.cssText = 'margin-bottom:5px;padding:6px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius)';
       const title = document.createElement('div');
       title.style.cssText = 'font-size:11px;color:var(--text2);line-height:1.35;cursor:pointer;margin-bottom:4px';
+      const znacznik = {
+        do_akceptacji: ['⏳', 'czeka na akceptację', 'var(--warn-text)'],
+        odrzucona:     ['↩', 'do poprawki', 'var(--red)'],
+        roboczy:       ['✎', 'robocza', 'var(--text3)'],
+        zaakceptowana: ['✓', 'zaakceptowana', 'var(--green)']
+      }[row.status || 'zaakceptowana'];
       title.textContent = row.etykieta || 'Umowa';
+      if (znacznik) {
+        const st = document.createElement('div');
+        st.style.cssText = 'font-size:10px;margin-top:2px;color:' + znacznik[2];
+        st.textContent = znacznik[0] + ' ' + znacznik[1]
+          + (row.status === 'zaakceptowana' && row.akceptant ? ' — ' + row.akceptant : '')
+          + (row.status === 'odrzucona' && row.uwagi ? ': ' + row.uwagi : '');
+        title.appendChild(st);
+      }
       title.addEventListener('click', () => loadFromHistory(i));
       const meta = document.createElement('div');
       meta.style.cssText = 'font-size:10px;color:var(--text3);display:flex;justify-content:space-between;align-items:center;gap:6px';
@@ -2017,7 +2639,13 @@ async function deleteFromHistory(id) {
 function loadFromHistory(i) {
   const row = historyCache[i];
   if (!row || !row.dane) return;
-  const s = row.dane;
+  wczytajSnapshot(row.dane);
+  biezacaUmowa = { id: row.id, status: row.status || 'zaakceptowana' };
+  renderAll(true);
+}
+
+function wczytajSnapshot(s) {
+  if (!s) return;
 
   state.wykType = s.wykType || 'osoba';
   document.querySelectorAll('#wykTypeGroup .pill').forEach(p => {
@@ -2051,8 +2679,6 @@ function loadFromHistory(i) {
 
   state.inv = s.inv || null;
   if (s.inv) { setVal('invSearch', s.inv.name || ''); }
-
-  renderAll(true);
 }
 
 /* ─────────────── Widoki ─────────────── */
@@ -2060,17 +2686,21 @@ function loadFromHistory(i) {
 function switchView(view) {
   const app = document.getElementById('appPane');
   const cfg = document.getElementById('cfgPane');
+  const akc = document.getElementById('akcPane');
   const bg = document.getElementById('navGenerator');
   const bc = document.getElementById('navConfig');
-  if (view === 'config') {
-    app.style.display = 'none';
-    cfg.style.display = 'block';
-    bg.classList.remove('active'); bc.classList.add('active');
-  } else {
-    app.style.display = 'flex';
-    cfg.style.display = 'none';
-    bg.classList.add('active'); bc.classList.remove('active');
-  }
+  const ba = document.getElementById('navAkcept');
+  if (view === 'akceptacja' && !czyAkceptujacy()) view = 'generator';
+
+  app.style.display = view === 'generator' ? 'flex' : 'none';
+  cfg.style.display = view === 'config' ? 'block' : 'none';
+  if (akc) akc.style.display = view === 'akceptacja' ? 'block' : 'none';
+
+  bg.classList.toggle('active', view === 'generator');
+  bc.classList.toggle('active', view === 'config');
+  if (ba) ba.classList.toggle('active', view === 'akceptacja');
+
+  if (view === 'akceptacja') odswiezAkceptacje();
 }
 
 document.addEventListener('DOMContentLoaded', initAuth);
