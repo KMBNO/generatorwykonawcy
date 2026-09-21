@@ -594,6 +594,15 @@ textarea { resize: vertical; line-height: 1.5; }
       <input type="password" id="cfgMailKey" placeholder="ten sam ciąg co w ustawieniach skryptu">
       <div class="hint">Trafia do Supabase, nie do kodu na GitHubie.</div>
     </div>
+    <div class="field">
+      <label>Powiadamiaj (adresy oddzielone przecinkiem)</label>
+      <input type="text" id="cfgMailDo" placeholder="brygida.bujno@kmbno.pl">
+      <div class="hint">
+        Puste = mail idzie do <strong>wszystkich</strong> z rolą akceptującą. Wpisanie adresów zawęża
+        wysyłkę tylko do nich — role zostają bez zmian, więc reszta dalej może akceptować, jeśli trzeba.
+        Skrypt i tak przyjmuje wyłącznie adresy w domenie @kmbno.pl.
+      </div>
+    </div>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
       <button class="btn btn-primary" style="flex:0 0 auto;padding:9px 18px;white-space:nowrap" onclick="saveConfig(true)">Zapisz dla całego zespołu</button>
       <button class="btn btn-secondary" style="flex:0 0 auto;padding:9px 18px;white-space:nowrap" onclick="testMail()">Wyślij próbny mail</button>
@@ -745,6 +754,7 @@ let CFG = {
   driveKey: '',        // tajny klucz do tego skryptu (nigdy w kodzie repozytorium)
   mailUrl: '',         // adres skryptu wysyłającego powiadomienia o akceptacji
   mailKey: '',         // tajny klucz do skryptu powiadomień
+  mailDo: '',          // komu wysyłać powiadomienia; puste = wszystkim akceptującym
   boardWyk: DEFAULT_BOARD_WYK,
   boardInv: DEFAULT_BOARD_INV,
   mapWyk: { addr:'', pesel:'', dowod:'', nip:'' },
@@ -916,6 +926,8 @@ async function loadConfig() {
   if (mu) mu.value = CFG.mailUrl || '';
   const mk = document.getElementById('cfgMailKey');
   if (mk) mk.value = CFG.mailKey || '';
+  const md = document.getElementById('cfgMailDo');
+  if (md) md.value = CFG.mailDo || '';
 }
 
 async function saveConfig(shared) {
@@ -928,6 +940,8 @@ async function saveConfig(shared) {
   const mkEl = document.getElementById('cfgMailKey');
   if (muEl) CFG.mailUrl = (muEl.value || '').trim();
   if (mkEl) CFG.mailKey = (mkEl.value || '').trim();
+  const mdEl = document.getElementById('cfgMailDo');
+  if (mdEl) CFG.mailDo = (mdEl.value || '').trim();
   /* Zapisujemy tylko to, co użytkownik faktycznie wybrał. Puste pole
      (bo lista nie została jeszcze wczytana) NIE kasuje działającego
      ustawienia — inaczej jedno kliknięcie „Zapisz" potrafi wyzerować
@@ -2359,7 +2373,12 @@ async function wyslijDoAkceptacji() {
 
 async function powiadomOAkceptacji(etykieta) {
   if (!CFG.mailUrl || !CFG.mailKey) return 'Powiadomienie mailowe nie jest skonfigurowane — daj znać osobiście.';
-  const adresy = AKCEPTUJACY.map(a => a.email).filter(Boolean).join(',');
+  /* Lista z Konfiguracji ma pierwszeństwo. Pusta = wszyscy akceptujący —
+     wygodne na start, ale w praktyce mailem zwykle interesuje się
+     jedna osoba, a nie każdy, kto ma prawo podpisu. */
+  const adresy = CFG.mailDo
+    ? CFG.mailDo.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean).join(',')
+    : AKCEPTUJACY.map(a => a.email).filter(Boolean).join(',');
   if (!adresy) return 'Nie ma komu wysłać maila — brak osób z rolą akceptującą.';
   try {
     const url = CFG.mailUrl
@@ -2435,7 +2454,14 @@ async function odswiezAkceptacje() {
     bNie.textContent = 'Do poprawki';
     bNie.addEventListener('click', () => odrzuc(row.id));
 
-    btns.appendChild(bOtw); btns.appendChild(bOk); btns.appendChild(bNie);
+    const bDel = document.createElement('button');
+    bDel.className = 'btn btn-secondary';
+    bDel.style.cssText = 'flex:0 0 auto;padding:7px 14px;white-space:nowrap;color:var(--red);border-color:#f5c6c6';
+    bDel.textContent = 'Usuń';
+    bDel.title = 'Kasuje umowę bezpowrotnie. Jeśli autor ma ją tylko poprawić — użyj „Do poprawki".';
+    bDel.addEventListener('click', () => usunZKolejki(row));
+
+    btns.appendChild(bOtw); btns.appendChild(bOk); btns.appendChild(bNie); btns.appendChild(bDel);
     wrap.appendChild(co); wrap.appendChild(btns);
     list.appendChild(wrap);
   });
@@ -2473,6 +2499,24 @@ async function akceptuj(id, i) {
     renderAll(true);
   } catch (e) {
     alert('Nie udało się zaakceptować:\n' + (e.message || e));
+  }
+}
+
+/* Kasowanie z kolejki — na wypadek dubla, pomyłki albo umowy,
+   która po prostu nie dojdzie do skutku. Świadomie wymaga potwierdzenia
+   i podpowiada łagodniejszą drogę, bo cofnąć się nie da. */
+async function usunZKolejki(row) {
+  const co = row.etykieta || 'ta umowa';
+  if (!confirm('Usunąć bezpowrotnie?\n\n' + co + '\nAutor: ' + (row.autor || '—') +
+      '\n\nTego nie da się cofnąć. Jeśli autor ma tylko coś poprawić,\nzamknij to okno i użyj „Do poprawki".')) return;
+  try {
+    const { error } = await sb.from(TABLE_UMOWY).delete().eq('id', row.id);
+    if (error) throw error;
+    if (biezacaUmowa.id === row.id) biezacaUmowa = { id: null, status: null };
+    await odswiezAkceptacje();
+    await renderHistory();
+  } catch (e) {
+    alert('Nie udało się usunąć:\n' + (e.message || e));
   }
 }
 
