@@ -577,6 +577,27 @@ textarea { resize: vertical; line-height: 1.5; }
     <div id="cfgPodpisResult" style="margin-top:10px;font-size:12px"></div>
   </div>
 
+  <div class="cfg-card" id="cardProg" style="display:none">
+    <h2>Próg kwotowy — umowy bez akceptacji</h2>
+    <div class="cd">
+      Umowy do tej kwoty operatorzy wystawiają i drukują sami, bez Twojej akceptacji i bez podpisu
+      (obie strony podpisują odręcznie). Powyżej progu umowa musi przejść przez zakładkę
+      „Do akceptacji".
+      <br><br>
+      Próg pilnuje <strong>baza</strong>, nie przeglądarka — operator nie wystawi sobie umowy powyżej
+      progu, nawet grzebiąc w kodzie strony. Puste pole albo 0 = próg wyłączony, wszystko idzie
+      przez akceptację.
+    </div>
+    <div class="field">
+      <label>Próg (zł brutto, włącznie)</label>
+      <input type="text" id="cfgProg" placeholder="6000">
+      <div class="hint">Umowa na dokładnie tę kwotę jeszcze mieści się w progu.</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn btn-primary" style="flex:0 0 auto;padding:9px 18px;white-space:nowrap" onclick="saveConfig(true)">Zapisz dla całego zespołu</button>
+    </div>
+  </div>
+
   <div class="cfg-card" id="cardMail" style="display:none">
     <h2>Powiadomienia o umowach do akceptacji</h2>
     <div class="cd">
@@ -731,12 +752,13 @@ const TABLE_PODPIS = 'podpisy';
 let MOJA_ROLA   = 'przygotowujacy';
 let MOJ_PODPIS  = null;   // { obraz, opis } — tylko własny
 let AKCEPTUJACY = [];     // [{ email }] — komu wysłać powiadomienie
+let ROLE_WSZYSTKIE = [];  // [{ user_id, email, rola }] — m.in. żeby znaleźć adres autora
 let akceptCache = [];     // umowy czekające na decyzję
 
 /* Umowa otwarta z listy „Do akceptacji" albo wysłana do akceptacji
    w tej sesji — żeby akceptacja trafiła w ten sam wiersz, a nie
    zakładała kolejnego. */
-let biezacaUmowa = { id: null, status: null };
+let biezacaUmowa = { id: null, status: null, dokument: null };
 
 function czyAkceptujacy() { return MOJA_ROLA === 'akceptujacy'; }
 
@@ -755,6 +777,7 @@ let CFG = {
   mailUrl: '',         // adres skryptu wysyłającego powiadomienia o akceptacji
   mailKey: '',         // tajny klucz do skryptu powiadomień
   mailDo: '',          // komu wysyłać powiadomienia; puste = wszystkim akceptującym
+  progKwota: '',       // do tej kwoty operator wystawia umowę sam; puste = zawsze przez akceptację
   boardWyk: DEFAULT_BOARD_WYK,
   boardInv: DEFAULT_BOARD_INV,
   mapWyk: { addr:'', pesel:'', dowod:'', nip:'' },
@@ -841,6 +864,7 @@ async function wczytajRole() {
   try {
     const { data, error } = await sb.from(TABLE_ROLE).select('user_id, email, rola');
     if (error) throw error;
+    ROLE_WSZYSTKIE = data || [];
     (data || []).forEach(r => {
       if (r.user_id === currentUser.id) MOJA_ROLA = r.rola;
       if (r.rola === 'akceptujacy' && r.email) AKCEPTUJACY.push({ email: r.email });
@@ -853,6 +877,18 @@ async function wczytajRole() {
   }
 }
 
+/* Operator widzi „PDF / Druk" tylko wtedy, gdy wolno mu pobrać:
+   umowa mieści się w progu albo jest już zatwierdzona i ma gotowy plik.
+   Wywoływane też z renderAll, bo kwota zmienia się w trakcie pisania. */
+function odswiezPrzyciski() {
+  const akc = czyAkceptujacy();
+  const tryb = czyMogePobrac();
+  const pokaz = (id, czy) => { const e = document.getElementById(id); if (e) e.style.display = czy ? '' : 'none'; };
+  pokaz('btnPdfSide', akc || !!tryb);
+  pokaz('btnDoAkceptacji', !akc && !tryb);
+  document.body.classList.toggle('rola-przygotowujacy', !akc && !tryb);
+}
+
 function zastosujRole() {
   const akc = czyAkceptujacy();
   document.body.classList.toggle('rola-przygotowujacy', !akc);
@@ -863,6 +899,7 @@ function zastosujRole() {
   pokaz('navAkcept', akc);
   pokaz('cardPodpis', akc);
   pokaz('cardMail', akc);
+  pokaz('cardProg', akc);
 
   const opis = document.getElementById('cfgRolaOpis');
   if (opis) {
@@ -877,13 +914,14 @@ function zastosujRole() {
   }
 
   document.querySelectorAll('#cfgPane input, #cfgPane select, #cfgPane textarea').forEach(el => {
-    if (el.closest('#cardPodpis') || el.closest('#cardMail')) return;
+    if (el.closest('#cardPodpis') || el.closest('#cardMail') || el.closest('#cardProg')) return;
     el.disabled = !akc;
   });
   document.querySelectorAll('#cfgPane button').forEach(b => {
-    if (b.closest('#cardPodpis') || b.closest('#cardMail')) return;
+    if (b.closest('#cardPodpis') || b.closest('#cardMail') || b.closest('#cardProg')) return;
     if (/Zapisz|Wyczy/i.test(b.textContent)) b.disabled = !akc;
   });
+  odswiezPrzyciski();
 }
 
 /* ─────────────── Ustawienia (Supabase → localStorage) ─────────────── */
@@ -928,6 +966,8 @@ async function loadConfig() {
   if (mk) mk.value = CFG.mailKey || '';
   const md = document.getElementById('cfgMailDo');
   if (md) md.value = CFG.mailDo || '';
+  const pk = document.getElementById('cfgProg');
+  if (pk) pk.value = CFG.progKwota || '';
 }
 
 async function saveConfig(shared) {
@@ -942,6 +982,8 @@ async function saveConfig(shared) {
   if (mkEl) CFG.mailKey = (mkEl.value || '').trim();
   const mdEl = document.getElementById('cfgMailDo');
   if (mdEl) CFG.mailDo = (mdEl.value || '').trim();
+  const pkEl = document.getElementById('cfgProg');
+  if (pkEl) CFG.progKwota = (pkEl.value || '').trim();
   /* Zapisujemy tylko to, co użytkownik faktycznie wybrał. Puste pole
      (bo lista nie została jeszcze wczytana) NIE kasuje działającego
      ustawienia — inaczej jedno kliknięcie „Zapisz" potrafi wyzerować
@@ -2083,16 +2125,28 @@ function renderAll(scrollTop) {
   blokPodpisow() +
 '</div>';
 
-  const akcja = czyAkceptujacy()
+  const tryb = czyMogePobrac();
+  const akcja = (czyAkceptujacy() || tryb)
     ? '<button class="btn btn-primary" style="flex:0 0 auto;padding:8px 16px;white-space:nowrap" onclick="downloadHTML()">PDF / Druk</button>'
     : '<button class="btn btn-primary" style="flex:0 0 auto;padding:8px 16px;white-space:nowrap;background:var(--green);border-color:var(--green)" onclick="wyslijDoAkceptacji()">Wyślij do akceptacji</button>';
 
-  const pas =
-    !czyAkceptujacy()
-      ? '<div class="znak-roboczy">Wersja robocza — dokument nabiera mocy dopiero po akceptacji i podpisie. Pobranie pliku jest po stronie osoby akceptującej.</div>'
-      : (biezacaUmowa.status === 'do_akceptacji'
-          ? '<div class="znak-roboczy">Ta umowa czeka na Twoją decyzję — otwórz zakładkę „Do akceptacji", żeby ją zatwierdzić i podpisać.</div>'
-          : '');
+  let pas = '';
+  if (czyAkceptujacy()) {
+    if (biezacaUmowa.status === 'do_akceptacji')
+      pas = '<div class="znak-roboczy">Ta umowa czeka na Twoją decyzję — otwórz zakładkę „Do akceptacji", żeby ją zatwierdzić i podpisać.</div>';
+  } else if (tryb === 'gotowy') {
+    pas = '<div class="znak-roboczy" style="background:var(--green-bg);color:var(--green);border-color:var(--green-border)">'
+        + 'Umowa zatwierdzona i podpisana. „PDF / Druk" pobiera dokładnie ten dokument, który został zaakceptowany.</div>';
+  } else if (tryb === 'prog') {
+    pas = '<div class="znak-roboczy" style="background:var(--green-bg);color:var(--green);border-color:var(--green-border)">'
+        + 'Kwota mieści się w progu ' + progKwoty().toLocaleString('pl-PL') + ' zł — tę umowę wystawiasz sam, '
+        + 'bez akceptacji. Dokument wychodzi bez podpisu: podpisują go odręcznie obie strony.</div>';
+  } else {
+    pas = '<div class="znak-roboczy">Wersja robocza — dokument nabiera mocy dopiero po akceptacji i podpisie. '
+        + (progKwoty() ? 'Sam wystawisz umowę do ' + progKwoty().toLocaleString('pl-PL') + ' zł; ta jest powyżej progu.' : 'Pobranie pliku jest po stronie osoby akceptującej.')
+        + '</div>';
+  }
+  odswiezPrzyciski();
 
   pane.innerHTML =
     '<div class="doc-actions">' +
@@ -2142,34 +2196,25 @@ function copyDoc() {
 
 /* ─────────────── Eksport do druku / PDF ─────────────── */
 
-function downloadHTML() {
-  if (!czyAkceptujacy()) {
-    alert('Pobranie umowy jest po stronie osoby akceptującej.\n\n'
-      + 'Kliknij „Wyślij do akceptacji" — po zatwierdzeniu i podpisaniu\n'
-      + 'gotowy plik pobierze osoba, która umowę podpisuje.');
-    return;
-  }
-  if (!document.getElementById('umowaContent')) renderAll();
-
-  // Podpis wchodzi na dokument dopiero w chwili pobrania przez osobę
-  // akceptującą — dlatego najpierw status, potem ponowne złożenie widoku.
-  if (biezacaUmowa.status !== 'zaakceptowana') {
-    biezacaUmowa.status = 'zaakceptowana';
-    renderAll();
-  }
-
-  const umowaEl = document.getElementById('umowaContent');
-  const zalEl = document.getElementById('zalacznikContent');
-  if (!umowaEl) { alert('Najpierw wygeneruj umowę.'); return; }
-
-  if (!biezacaUmowa.id) saveToHistory(true);
-
+/* Nazwa pliku z danych umowy — używana i przy pobieraniu, i przy
+   zamrażaniu dokumentu w chwili akceptacji. */
+function nazwaPliku() {
   const w = getWyk();
   const nameSlug = (w.name || 'wykonawca').replace(/\s+/g, '_').replace(/[^\wąćęłńóśżźĄĆĘŁŃÓŚŻŹ_-]/g, '');
   const citySlug = (g('pCity') || '').replace(/\s+/g, '_');
-  const fname = ['Umowa', nameSlug, citySlug].filter(Boolean).join('_');
+  return ['Umowa', nameSlug, citySlug].filter(Boolean).join('_');
+}
 
-  const html = '<!DOCTYPE html>\n<html lang="pl">\n<head>\n<meta charset="UTF-8">\n<title>' + esc(fname) + '</title>\n<style>\n' +
+/* Składa gotowy, samodzielny plik HTML z tego, co widać w podglądzie.
+   To ten plik trafia do pobrania, a przy akceptacji także do bazy —
+   dzięki czemu operator pobiera dokładnie ten dokument, który został
+   zatwierdzony, zamiast składać go sobie na nowo. */
+function zbudujDokument(fname) {
+  const umowaEl = document.getElementById('umowaContent');
+  const zalEl = document.getElementById('zalacznikContent');
+  if (!umowaEl) return null;
+
+  return '<!DOCTYPE html>\n<html lang="pl">\n<head>\n<meta charset="UTF-8">\n<title>' + esc(fname) + '</title>\n<style>\n' +
 '  *{margin:0;padding:0;box-sizing:border-box}\n' +
 '  body{font-family:"Times New Roman",Times,serif;font-size:11pt;line-height:1.55;color:#000;background:#fff}\n' +
 '  .strona{max-width:21cm;margin:0 auto;padding:2cm 1.8cm}\n' +
@@ -2206,7 +2251,9 @@ function downloadHTML() {
 umowaEl.innerHTML + '\n' +
 '<div class="zalacznik">' + (zalEl ? zalEl.innerHTML : '') + '</div>\n' +
 '</div>\n</body>\n</html>';
+}
 
+function pobierzPlik(html, fname) {
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -2216,6 +2263,115 @@ umowaEl.innerHTML + '\n' +
   link.click();
   document.body.removeChild(link);
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/* ─────────────── Próg kwotowy ───────────────
+   Umowy do ustalonej kwoty operator wystawia sam — bez akceptacji
+   i bez podpisu, obie strony podpisują odręcznie. Ten warunek jest
+   tu dla wygody interfejsu; naprawdę pilnuje go reguła w bazie
+   (patrz sql/prog.sql), więc podmiana czegokolwiek w przeglądarce
+   nic nie da. */
+function progKwoty() {
+  const v = parseFloat(String(CFG.progKwota || '').replace(/\s/g, '').replace(',', '.'));
+  return isFinite(v) && v > 0 ? v : 0;
+}
+
+function kwotaUmowy() {
+  const v = parseFloat(String(g('kwota') || '').replace(/\s/g, '').replace(',', '.'));
+  return isFinite(v) ? v : 0;
+}
+
+function ponizejProgu() {
+  const p = progKwoty();
+  const k = kwotaUmowy();
+  return p > 0 && k > 0 && k <= p;
+}
+
+/* Kto i kiedy może pobrać plik:
+   • osoba akceptująca — zawsze,
+   • operator — gdy umowa mieści się w progu (wersja bez podpisu),
+   • operator — gdy otwarta umowa jest już zaakceptowana i ma zapisany
+     gotowy dokument (pobiera ten zamrożony plik, nie składa nowego). */
+function czyMogePobrac() {
+  if (czyAkceptujacy()) return 'akceptujacy';
+  if (biezacaUmowa.status === 'zaakceptowana' && biezacaUmowa.dokument) return 'gotowy';
+  if (ponizejProgu()) return 'prog';
+  return null;
+}
+
+async function downloadHTML() {
+  const tryb = czyMogePobrac();
+
+  if (!tryb) {
+    const p = progKwoty();
+    alert('Pobranie tej umowy jest po stronie osoby akceptującej.\n\n'
+      + (p ? 'Sam wystawisz umowę do ' + p.toLocaleString('pl-PL') + ' zł.\n'
+           + 'Ta jest powyżej progu, więc kliknij „Wyślij do akceptacji" —\n'
+           + 'po zatwierdzeniu i podpisaniu pobierzesz gotowy plik tutaj.'
+          : 'Kliknij „Wyślij do akceptacji" — po zatwierdzeniu i podpisaniu\n'
+           + 'pobierzesz gotowy plik tutaj.'));
+    return;
+  }
+
+  // Umowa zatwierdzona: pobieramy dokładnie to, co podpisano.
+  if (tryb === 'gotowy') {
+    pobierzPlik(biezacaUmowa.dokument, nazwaPliku());
+    return;
+  }
+
+  if (!document.getElementById('umowaContent')) renderAll();
+
+  if (tryb === 'akceptujacy' && biezacaUmowa.status !== 'zaakceptowana') {
+    // Podpis wchodzi na dokument dopiero w chwili pobrania przez osobę
+    // akceptującą — dlatego najpierw status, potem ponowne złożenie widoku.
+    biezacaUmowa.status = 'zaakceptowana';
+    renderAll();
+  }
+
+  if (!document.getElementById('umowaContent')) { alert('Najpierw wygeneruj umowę.'); return; }
+
+  const fname = nazwaPliku();
+  const html = zbudujDokument(fname);
+
+  if (tryb === 'prog') await zapiszSamodzielna(html);
+  else if (!biezacaUmowa.id) saveToHistory(true);
+
+  pobierzPlik(html, fname);
+}
+
+/* Umowa wystawiona samodzielnie w ramach progu — ląduje w historii
+   z własnym statusem, żeby było widać, że nie przechodziła akceptacji. */
+async function zapiszSamodzielna(html) {
+  if (!sb || !currentUser) return;
+  const snap = getSnapshot();
+  try {
+    const etykieta = biezacaUmowa.id ? (snap.label || snapLabel(snap)) : await unikalnaEtykieta(snapLabel(snap));
+    snap.label = etykieta;
+    const wiersz = {
+      autor: userLabel(currentUser.email),
+      autor_id: currentUser.id,
+      etykieta: etykieta,
+      dane: snap,
+      status: 'samodzielna',
+      dokument: html,
+      uwagi: null
+    };
+    if (biezacaUmowa.id) {
+      const { error } = await sb.from(TABLE_UMOWY).update(wiersz).eq('id', biezacaUmowa.id);
+      if (error) throw error;
+    } else {
+      const { data, error } = await sb.from(TABLE_UMOWY).insert(wiersz).select('id').single();
+      if (error) throw error;
+      biezacaUmowa.id = data.id;
+    }
+    biezacaUmowa.status = 'samodzielna';
+    biezacaUmowa.dokument = html;
+    await renderHistory();
+  } catch (e) {
+    alert('Plik został pobrany, ale nie udało się zapisać umowy w historii:\n'
+      + (e.message || e)
+      + '\n\nJeśli kwota przekracza próg, baza odrzuci taki zapis — wtedy\nwyślij umowę do akceptacji.');
+  }
 }
 
 /* ─────────────── Podpis (tylko własny) ─────────────── */
@@ -2358,7 +2514,7 @@ async function wyslijDoAkceptacji() {
       if (error) throw error;
       id = data.id;
     }
-    biezacaUmowa = { id: id, status: 'do_akceptacji' };
+    biezacaUmowa = { id: id, status: 'do_akceptacji', dokument: null };
 
     const mail = await powiadomOAkceptacji(etykieta);
     await renderHistory();
@@ -2471,7 +2627,7 @@ function otworzDoAkceptacji(i) {
   const row = akceptCache[i];
   if (!row) return;
   wczytajSnapshot(row.dane);
-  biezacaUmowa = { id: row.id, status: row.status };
+  biezacaUmowa = { id: row.id, status: row.status, dokument: null };
   switchView('generator');
   renderAll(true);
 }
@@ -2480,25 +2636,68 @@ async function akceptuj(id, i) {
   if (!MOJ_PODPIS || !MOJ_PODPIS.obraz) {
     if (!confirm('Nie masz wgranego podpisu — umowa wyjdzie z pustą kreską.\n\nAkceptować mimo to?')) return;
   }
+  const row = akceptCache[i];
   try {
+    /* Składamy gotowy dokument TU, w przeglądarce osoby podpisującej —
+       jedynym miejscu, w którym podpis w ogóle istnieje. Zapisany plik
+       jest potem tym, co pobiera operator; nikt nie odtwarza go na nowo. */
+    if (row) wczytajSnapshot(row.dane);
+    biezacaUmowa = { id: id, status: 'zaakceptowana', dokument: null };
+    renderAll();
+    const dokument = zbudujDokument(nazwaPliku());
+
     const { error } = await sb.from(TABLE_UMOWY).update({
       status: 'zaakceptowana',
       akceptant: userLabel(currentUser.email),
       akceptant_id: currentUser.id,
       zaakceptowano: new Date().toISOString(),
+      dokument: dokument,
       uwagi: null
     }).eq('id', id);
     if (error) throw error;
 
-    const row = akceptCache[i];
-    if (row) { wczytajSnapshot(row.dane); }
-    biezacaUmowa = { id: id, status: 'zaakceptowana' };
+    biezacaUmowa.dokument = dokument;
+    const mail = await powiadomAutora(row, 'zaakceptowana');
     await odswiezAkceptacje();
     await renderHistory();
     switchView('generator');
     renderAll(true);
+    if (mail) alert('Umowa zatwierdzona i podpisana.\n\n' + mail);
   } catch (e) {
     alert('Nie udało się zaakceptować:\n' + (e.message || e));
+  }
+}
+
+/* Po decyzji osoby akceptującej autor dostaje maila — inaczej musiałby
+   zgadywać, czy może już drukować, czy siedzi w kolejce. */
+async function powiadomAutora(row, co) {
+  if (!row || !CFG.mailUrl || !CFG.mailKey) return '';
+  const wpis = (ROLE_WSZYSTKIE || []).find(r => r.user_id === row.autor_id);
+  const adres = wpis && wpis.email;
+  if (!adres) return 'Nie znalazłem adresu autora — powiadom go osobiście.';
+
+  const zatwierdzona = co === 'zaakceptowana';
+  const temat = zatwierdzona
+    ? 'Umowa zatwierdzona: ' + (row.etykieta || '')
+    : 'Umowa do poprawki: ' + (row.etykieta || '');
+  const tresc = zatwierdzona
+    ? userLabel(currentUser.email) + ' zatwierdził(a) i podpisał(a) umowę.\n\n'
+      + (row.etykieta || '') + '\n\nOtwórz generator, wczytaj ją z historii i pobierz gotowy plik.'
+    : userLabel(currentUser.email) + ' odesłał(a) umowę do poprawki.\n\n'
+      + (row.etykieta || '') + '\n\nUwagi: ' + (row.uwagi || '—')
+      + '\n\nOtwórz generator, popraw i wyślij ponownie do akceptacji.';
+
+  try {
+    const url = CFG.mailUrl
+      + '?klucz=' + encodeURIComponent(CFG.mailKey)
+      + '&do=' + encodeURIComponent(adres)
+      + '&temat=' + encodeURIComponent(temat)
+      + '&tresc=' + encodeURIComponent(tresc);
+    const j = await (await fetch(url)).json();
+    if (j.error) throw new Error(j.error);
+    return 'Powiadomienie poszło na: ' + adres;
+  } catch (e) {
+    return 'Mail do autora nie poszedł (' + (e.message || e) + ') — powiadom go osobiście.';
   }
 }
 
@@ -2512,7 +2711,7 @@ async function usunZKolejki(row) {
   try {
     const { error } = await sb.from(TABLE_UMOWY).delete().eq('id', row.id);
     if (error) throw error;
-    if (biezacaUmowa.id === row.id) biezacaUmowa = { id: null, status: null };
+    if (biezacaUmowa.id === row.id) biezacaUmowa = { id: null, status: null, dokument: null };
     await odswiezAkceptacje();
     await renderHistory();
   } catch (e) {
@@ -2521,15 +2720,18 @@ async function usunZKolejki(row) {
 }
 
 async function odrzuc(id) {
-  const uwagi = prompt('Co poprawić? Autor zobaczy tę uwagę w historii.');
+  const uwagi = prompt('Co poprawić? Autor zobaczy tę uwagę w historii i dostanie ją mailem.');
   if (uwagi === null) return;
+  const row = akceptCache.find(r => r.id === id);
   try {
     const { error } = await sb.from(TABLE_UMOWY).update({
       status: 'odrzucona', uwagi: uwagi || 'Do poprawki'
     }).eq('id', id);
     if (error) throw error;
+    const mail = await powiadomAutora(Object.assign({}, row, { uwagi: uwagi || 'Do poprawki' }), 'odrzucona');
     await odswiezAkceptacje();
     await renderHistory();
+    if (mail) alert('Umowa odesłana do poprawki.\n\n' + mail);
   } catch (e) {
     alert('Nie udało się odesłać do poprawki:\n' + (e.message || e));
   }
@@ -2608,7 +2810,7 @@ async function renderHistory() {
   list.innerHTML = '<div style="font-size:11px;color:var(--text3)">Wczytywanie...</div>';
   try {
     const { data, error } = await sb.from(TABLE_UMOWY)
-      .select('id, utworzono, autor, etykieta, dane, status, uwagi, akceptant')
+      .select('id, utworzono, autor, etykieta, dane, status, uwagi, akceptant')  // bez „dokument" — bywa ciężki
       .order('utworzono', { ascending: false }).limit(100);
     if (error) throw error;
     historyCache = data || [];
@@ -2626,6 +2828,7 @@ async function renderHistory() {
         do_akceptacji: ['⏳', 'czeka na akceptację', 'var(--warn-text)'],
         odrzucona:     ['↩', 'do poprawki', 'var(--red)'],
         roboczy:       ['✎', 'robocza', 'var(--text3)'],
+        samodzielna:   ['✓', 'wystawiona samodzielnie (w progu)', 'var(--green)'],
         zaakceptowana: ['✓', 'zaakceptowana', 'var(--green)']
       }[row.status || 'zaakceptowana'];
       title.textContent = row.etykieta || 'Umowa';
@@ -2680,12 +2883,19 @@ async function deleteFromHistory(id) {
   } catch(e) { alert('Nie udało się usunąć: ' + (e.message || e)); }
 }
 
-function loadFromHistory(i) {
+async function loadFromHistory(i) {
   const row = historyCache[i];
   if (!row || !row.dane) return;
   wczytajSnapshot(row.dane);
-  biezacaUmowa = { id: row.id, status: row.status || 'zaakceptowana' };
+  biezacaUmowa = { id: row.id, status: row.status || 'zaakceptowana', dokument: null };
   renderAll(true);
+  // Gotowy plik dociągamy osobno — w liście byłby zbędnym balastem.
+  if (row.status === 'zaakceptowana' || row.status === 'samodzielna') {
+    try {
+      const { data } = await sb.from(TABLE_UMOWY).select('dokument').eq('id', row.id).maybeSingle();
+      if (data && data.dokument) { biezacaUmowa.dokument = data.dokument; renderAll(); }
+    } catch (e) { /* brak dokumentu = po prostu nie ma czego pobrać */ }
+  }
 }
 
 function wczytajSnapshot(s) {
