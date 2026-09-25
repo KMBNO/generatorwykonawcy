@@ -39,6 +39,9 @@ Tworzy to dwie tabele:
 - `umowy_wykonawcy` — wspólna historia umów,
 - `ustawienia` — wybrane tablice Monday, mapowanie kolumn i token Monday.
 
+Potem, w tej samej kolejności: `sql/role.sql` (role, podpisy, obieg akceptacji) i `sql/prog.sql`
+(próg kwotowy, gotowy dokument przy umowie). Każdy z tych plików można uruchamiać wielokrotnie.
+
 ### 2. Hosting
 
 Wrzuć `index.html` do nowego repozytorium na GitHubie i włącz **Settings → Pages → Deploy from
@@ -135,16 +138,35 @@ zmienić z poziomu przeglądarki — tabela `uprawnienia` nie ma polityki zapisu
 | | przygotowujący | akceptujący |
 |---|---|---|
 | wypełnia formularz, widzi podgląd | ✓ | ✓ |
-| pobiera plik / drukuje | — | ✓ |
+| pobiera umowę **do progu kwotowego**, bez podpisu | ✓ | ✓ |
+| pobiera umowę **powyżej progu** | dopiero po akceptacji | ✓ |
 | własny podpis na umowie | — | ✓ |
 | zakładka „Do akceptacji" | — | ✓ |
-| zmienia ustawienia zespołu (Monday, Dysk) | — | ✓ |
+| zmienia ustawienia zespołu (Monday, Dysk, progi, maile) | — | ✓ |
 
 **Obieg:** przygotowujący wypełnia umowę → **Wyślij do akceptacji** → umowa ląduje w zakładce
 „Do akceptacji" i (jeśli skonfigurowano powiadomienia) idzie mail → akceptujący otwiera, sprawdza,
 w razie potrzeby poprawia → **Akceptuję i podpisuję** → dopiero teraz na dokumencie pojawia się
-podpis i odblokowuje się pobranie. Zamiast akceptacji można odesłać umowę **do poprawki** z uwagą —
-autor zobaczy ją w historii.
+podpis. Zamiast akceptacji można odesłać umowę **do poprawki** z uwagą (autor zobaczy ją w historii)
+albo **usunąć ją z kolejki**, jeśli w ogóle nie powinna powstać.
+
+W chwili akceptacji gotowy, podpisany dokument zapisuje się przy umowie (kolumna `dokument`).
+Autor otwiera go potem z **Historii umów** i drukuje — dostaje dokładnie to, co zostało
+zatwierdzone, a nie dokument składany od nowa w jego przeglądarce.
+
+### Próg kwotowy — umowy bez podpisu
+
+Drobne zlecenia nie muszą czekać na akceptację. W **⚙ Konfiguracji** ustawia się próg (domyślnie
+6000 zł): umowę do tej kwoty przygotowujący wystawia i pobiera sam, bez podpisu i bez kolejki.
+Powyżej progu przycisk pobierania prowadzi do akceptacji.
+
+Progu pilnuje **baza, nie przeglądarka**. Polityki `umowy_wyk_insert` / `umowy_wyk_update`
+przepuszczają status `samodzielna` tylko wtedy, gdy `kwota_umowy(dane)` mieści się w
+`prog_kwotowy()` — a ta druga funkcja czyta próg z tych samych ustawień zespołu, które widać
+w Konfiguracji. Podmiana czegokolwiek w kodzie strony nic tu nie da: zapis po prostu nie przejdzie.
+Próg `0` (albo puste pole) wyłącza mechanizm — wtedy każda umowa idzie przez akceptację.
+
+Wszystko to dokłada plik `sql/prog.sql`, uruchamiany **po** `sql/role.sql`.
 
 ### Co tu naprawdę zabezpiecza, a co jest tylko wygodą
 
@@ -156,10 +178,17 @@ podział ról stoi na dwóch regułach po stronie serwera:
    tych bajtów żadnym sposobem — nie ma z czego złożyć podpisanego dokumentu.
 2. **Status `zaakceptowana`** może zapisać wyłącznie konto z rolą akceptującą — pilnuje tego
    polityka `umowy_wyk_update`, nie kod strony.
+3. **Próg kwotowy** sprawdza baza przy zapisie, a kwotę odczytuje z samej umowy — nie z tego,
+   co przyśle przeglądarka.
 
 Ukrycie przycisku „PDF / Druk" i zablokowanie Ctrl+P to wygoda i jasny komunikat, a nie zapora.
 Podgląd umowy jest na ekranie, więc zrzut ekranu zawsze pozostaje możliwy — chodzi o to, żeby nie
 dało się wyprodukować dokumentu **z podpisem**, i to jest zamknięte szczelnie.
+
+Warto to powiedzieć wprost: po akceptacji autor dostaje podpisany dokument do druku, więc technicznie
+może z niego wyciąć podpis. Tego się nie da zamknąć — wynika z tego, że ma go wydrukować. Zamknięte
+jest co innego: **podpisana umowa nie powstanie bez osoby akceptującej**, a przy każdej widnieje,
+kto i kiedy ją zatwierdził (`akceptant`, `zaakceptowano`).
 
 ### Zakładanie kont
 
@@ -170,12 +199,22 @@ i uruchom plik ponownie.
 
 ### Powiadomienia mailem (opcjonalnie)
 
-`google-apps-script/Powiadomienia.gs` to osobny, mały skrypt w Google, który wysyła maila do osób
-akceptujących. Świadomie **osobny projekt** niż skrypt czytający zakresy z Dysku: tamten ma prawo
-tylko czytać Dysk, ten tylko wysyłać pocztę. Dwa wąskie uprawnienia zamiast jednego szerokiego.
-Skrypt wysyła wyłącznie na adresy `@kmbno.pl` i ma dzienny limit, więc nawet gdyby klucz wyciekł,
-nie posłuży do rozsyłania czegokolwiek na zewnątrz. Bez skonfigurowania go obieg działa normalnie —
-po prostu bez maila.
+`google-apps-script/Powiadomienia.gs` to osobny, mały skrypt w Google, który wysyła maile o umowach.
+Świadomie **osobny projekt** niż skrypt czytający zakresy z Dysku: tamten ma prawo tylko czytać Dysk,
+ten tylko wysyłać pocztę. Dwa wąskie uprawnienia zamiast jednego szerokiego. Skrypt wysyła wyłącznie
+na adresy `@kmbno.pl` i ma dzienny limit, więc nawet gdyby klucz wyciekł, nie posłuży do rozsyłania
+czegokolwiek na zewnątrz. Bez skonfigurowania go obieg działa normalnie — po prostu bez maila.
+
+W Konfiguracji są dwa osobne pola, bo to dwie różne chwile i dwie różne grupy ludzi:
+
+- **Umowa czeka na akceptację — powiadom.** Puste = mail idzie do wszystkich z rolą akceptującą.
+  Wpisanie adresów zawęża wysyłkę tylko do nich (role zostają bez zmian).
+- **Umowa zatwierdzona — powiadom.** Puste = mail dostaje autor umowy **i cały zespół operatorów**,
+  czyli wszystkie konta z rolą przygotowującą — lista aktualizuje się sama, gdy ktoś dojdzie albo
+  odejdzie. Wpisanie adresów zawęża wysyłkę do nich; autor dostaje mail zawsze.
+
+Mail po akceptacji mówi wprost, gdzie leży gotowy plik: **Generator → Historia umów → PDF / Druk**.
+Odesłanie do poprawki idzie tylko do autora, razem z uwagą.
 
 ---
 
@@ -241,6 +280,7 @@ poprawione — mogę przenieść poprawkę do starego generatora.
 index.html                                  ← cała aplikacja (jeden plik, bez budowania)
 sql/setup.sql                               ← tabele w Supabase, do wykonania raz
 sql/role.sql                                ← role, podpisy i obieg akceptacji
+sql/prog.sql                                ← próg kwotowy i gotowy dokument (uruchom po role.sql)
 google-apps-script/Kod.gs                   ← skrypt czytający zakresy z Dysku Google
 google-apps-script/Powiadomienia.gs         ← skrypt wysyłający maile o umowach do akceptacji
 google-apps-script/appsscript*.json         ← manifesty ograniczające uprawnienia obu skryptów
