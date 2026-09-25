@@ -616,12 +616,21 @@ textarea { resize: vertical; line-height: 1.5; }
       <div class="hint">Trafia do Supabase, nie do kodu na GitHubie.</div>
     </div>
     <div class="field">
-      <label>Powiadamiaj (adresy oddzielone przecinkiem)</label>
+      <label>Umowa czeka na akceptację — powiadom</label>
       <input type="text" id="cfgMailDo" placeholder="brygida.bujno@kmbno.pl">
       <div class="hint">
         Puste = mail idzie do <strong>wszystkich</strong> z rolą akceptującą. Wpisanie adresów zawęża
         wysyłkę tylko do nich — role zostają bez zmian, więc reszta dalej może akceptować, jeśli trzeba.
         Skrypt i tak przyjmuje wyłącznie adresy w domenie @kmbno.pl.
+      </div>
+    </div>
+    <div class="field">
+      <label>Umowa zatwierdzona — powiadom</label>
+      <input type="text" id="cfgMailPoAkcept" placeholder="puste = autor umowy + wszyscy operatorzy">
+      <div class="hint">
+        Puste = mail po akceptacji dostaje <strong>autor umowy i cały zespół operatorów</strong>
+        (wszystkie konta z rolą przygotowującą) — lista aktualizuje się sama, gdy ktoś dojdzie
+        albo odejdzie. Wpisanie adresów zawęża wysyłkę tylko do nich; autor dostaje mail zawsze.
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
@@ -778,6 +787,7 @@ let CFG = {
   mailKey: '',         // tajny klucz do skryptu powiadomień
   mailDo: '',          // komu wysyłać powiadomienia; puste = wszystkim akceptującym
   progKwota: '',       // do tej kwoty operator wystawia umowę sam; puste = zawsze przez akceptację
+  mailPoAkcept: '',    // kto dostaje mail po akceptacji; puste = autor + wszyscy operatorzy
   boardWyk: DEFAULT_BOARD_WYK,
   boardInv: DEFAULT_BOARD_INV,
   mapWyk: { addr:'', pesel:'', dowod:'', nip:'' },
@@ -968,6 +978,8 @@ async function loadConfig() {
   if (md) md.value = CFG.mailDo || '';
   const pk = document.getElementById('cfgProg');
   if (pk) pk.value = CFG.progKwota || '';
+  const mp = document.getElementById('cfgMailPoAkcept');
+  if (mp) mp.value = CFG.mailPoAkcept || '';
 }
 
 async function saveConfig(shared) {
@@ -984,6 +996,8 @@ async function saveConfig(shared) {
   if (mdEl) CFG.mailDo = (mdEl.value || '').trim();
   const pkEl = document.getElementById('cfgProg');
   if (pkEl) CFG.progKwota = (pkEl.value || '').trim();
+  const mpEl = document.getElementById('cfgMailPoAkcept');
+  if (mpEl) CFG.mailPoAkcept = (mpEl.value || '').trim();
   /* Zapisujemy tylko to, co użytkownik faktycznie wybrał. Puste pole
      (bo lista nie została jeszcze wczytana) NIE kasuje działającego
      ustawienia — inaczej jedno kliknięcie „Zapisz" potrafi wyzerować
@@ -2672,17 +2686,41 @@ async function akceptuj(id, i) {
    zgadywać, czy może już drukować, czy siedzi w kolejce. */
 async function powiadomAutora(row, co) {
   if (!row || !CFG.mailUrl || !CFG.mailKey) return '';
-  const wpis = (ROLE_WSZYSTKIE || []).find(r => r.user_id === row.autor_id);
-  const adres = wpis && wpis.email;
-  if (!adres) return 'Nie znalazłem adresu autora — powiadom go osobiście.';
 
+  const wpis = (ROLE_WSZYSTKIE || []).find(r => r.user_id === row.autor_id);
+  const autor = wpis && wpis.email;
   const zatwierdzona = co === 'zaakceptowana';
+
+  /* Autor musi wiedzieć zawsze — to on drukuje albo poprawia.
+     Po akceptacji idzie dodatkowo do zespołu: domyślnie do wszystkich
+     operatorów, bo o zatwierdzonej umowie powinien wiedzieć dział,
+     a nie tylko osoba, która akurat klikała. Listę można zawęzić
+     w Konfiguracji. */
+  let odbiorcy = [];
+  if (autor) odbiorcy.push(autor);
+  if (zatwierdzona) {
+    if (CFG.mailPoAkcept) {
+      odbiorcy = odbiorcy.concat(CFG.mailPoAkcept.split(/[,;\s]+/));
+    } else {
+      odbiorcy = odbiorcy.concat(
+        (ROLE_WSZYSTKIE || []).filter(r => r.rola === 'przygotowujacy').map(r => r.email));
+    }
+  }
+  odbiorcy = odbiorcy.map(a => (a || '').trim().toLowerCase())
+                     .filter(Boolean)
+                     .filter((a, i, t) => t.indexOf(a) === i);
+
+  if (!odbiorcy.length) return 'Nie miałem komu wysłać powiadomienia — daj znać osobiście.';
+
   const temat = zatwierdzona
     ? 'Umowa zatwierdzona: ' + (row.etykieta || '')
     : 'Umowa do poprawki: ' + (row.etykieta || '');
   const tresc = zatwierdzona
     ? userLabel(currentUser.email) + ' zatwierdził(a) i podpisał(a) umowę.\n\n'
-      + (row.etykieta || '') + '\n\nOtwórz generator, wczytaj ją z historii i pobierz gotowy plik.'
+      + (row.etykieta || '') + '\n'
+      + 'Przygotował(a): ' + (row.autor || '—') + '\n\n'
+      + 'Gotowy dokument jest już w generatorze: zakładka Generator → Historia umów →\n'
+      + 'kliknij tę umowę → „PDF / Druk\".'
     : userLabel(currentUser.email) + ' odesłał(a) umowę do poprawki.\n\n'
       + (row.etykieta || '') + '\n\nUwagi: ' + (row.uwagi || '—')
       + '\n\nOtwórz generator, popraw i wyślij ponownie do akceptacji.';
@@ -2690,14 +2728,14 @@ async function powiadomAutora(row, co) {
   try {
     const url = CFG.mailUrl
       + '?klucz=' + encodeURIComponent(CFG.mailKey)
-      + '&do=' + encodeURIComponent(adres)
+      + '&do=' + encodeURIComponent(odbiorcy.join(','))
       + '&temat=' + encodeURIComponent(temat)
       + '&tresc=' + encodeURIComponent(tresc);
     const j = await (await fetch(url)).json();
     if (j.error) throw new Error(j.error);
-    return 'Powiadomienie poszło na: ' + adres;
+    return 'Powiadomienie poszło na: ' + odbiorcy.join(', ');
   } catch (e) {
-    return 'Mail do autora nie poszedł (' + (e.message || e) + ') — powiadom go osobiście.';
+    return 'Mail nie poszedł (' + (e.message || e) + ') — powiadom zespół osobiście.';
   }
 }
 
